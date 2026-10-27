@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "roro3"
+version = "0.1.0"
+description = "Observation de paniers et démonstration familiale sur données fictives"
+readme = "README.md"
+requires-python = ">=3.12,<3.15"
+dependencies = ["tzdata>=2026.1", "python-dotenv>=1.2.2,<2"]
+
+[project.optional-dependencies]
+ui = ["nicegui==3.18.0"]
+dev = ["pytest>=9,<10", "ruff>=0.14,<1"]
+
+[project.scripts]
+roro3 = "roro3.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
