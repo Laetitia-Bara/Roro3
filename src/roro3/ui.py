@@ -40,10 +40,27 @@ body { background: #f7f5ef; color: #243b31; font-family: 'Segoe UI', Arial, sans
 .footer { font-size: 12px; color: #66786e; }
 .q-btn { border-radius: 12px; text-transform: none; font-weight: 650; }
 .q-toggle__label { font-size: 14px; }
+.merchant-heading { width: 100%; justify-content: space-between; align-items: center; }
+.merchant-disabled { background: #f1f1ec; border-style: dashed; }
+.merchant-paused { border-color: #d3ddd2; }
+.merchant-state { font-size: 11px; font-weight: 700; color: #66786e; }
+.merchant-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: auto; }
+.merchant-editor { width: min(720px, 95vw); max-width: 95vw; padding: 26px;
+    border-radius: 24px; gap: 14px; }
+.window-editor-row { display: grid; grid-template-columns: 1.25fr 1fr 1fr auto;
+    gap: 10px; align-items: center; width: 100%; }
+.editor-actions { width: 100%; justify-content: flex-end; gap: 8px; }
+.editor-error { color: #a94b48; font-weight: 650; }
+.estimated-note { background: #edf3eb; border-radius: 14px; padding: 14px;
+    width: 100%; gap: 6px; }
 @media (max-width: 800px) {
     .dashboard { grid-template-columns: 1fr; }
     .nicegui-content { padding: 20px 16px; }
     .hero { padding: 24px; }
+}
+@media (max-width: 600px) {
+    .window-editor-row { grid-template-columns: 1fr 1fr; }
+    .merchant-editor { padding: 20px; }
 }
 """
 
@@ -56,14 +73,18 @@ def run(settings: Settings, port: int = 8080, show: bool = True) -> None:
         raise RuntimeError("Installez l'option interface : pip install -e '.[ui]'.") from exc
 
     from .demo import build_demo
+    from .merchant_ui import open_merchant_editor
+    from .merchants import MerchantService
     from .planning import next_window
 
     application = build_demo(
         settings.database_path,
         now=datetime.now(UTC),
         initial_policy=settings.policy,
+        clock=lambda: datetime.now(UTC),
     )
     local_zone = ZoneInfo(settings.timezone)
+    merchant_service = MerchantService(application.repo, settings.timezone)
     weekdays = ("Lun.", "Mar.", "Mer.", "Jeu.", "Ven.", "Sam.", "Dim.")
 
     def local_timestamp(value: str) -> str:
@@ -98,6 +119,27 @@ def run(settings: Settings, port: int = 8080, show: bool = True) -> None:
                     type="positive",
                 )
             dashboard.refresh()
+
+        def set_merchant_state(merchant_id: str, field: str, value: bool) -> None:
+            try:
+                if field == "active":
+                    merchant_service.set_active(merchant_id, value)
+                else:
+                    merchant_service.set_watched(merchant_id, value)
+            except ValueError as error:
+                ui.notify(str(error), type="negative")
+            dashboard.refresh()
+
+        def refresh_estimates(merchant_id: str) -> None:
+            try:
+                merchant_service.refresh_estimates(merchant_id)
+            except ValueError as error:
+                ui.notify(str(error), type="negative")
+                return
+            dashboard.refresh()
+            ui.notify(
+                "Estimations recalculées à partir de l'historique disponible.", type="positive"
+            )
 
         @ui.refreshable
         def dashboard() -> None:
@@ -138,7 +180,7 @@ def run(settings: Settings, port: int = 8080, show: bool = True) -> None:
                 )
                 with ui.element("div").classes("metrics"):
                     for value, label in (
-                        (len(merchants), "commerçants fictifs"),
+                        (sum(m.active and m.watched for m in merchants), "commerçants suivis"),
                         (len(observations), "relevés conservés"),
                         (len(attempts), "tentatives conservées"),
                     ):
@@ -148,36 +190,95 @@ def run(settings: Settings, port: int = 8080, show: bool = True) -> None:
 
             with ui.element("div").classes("dashboard"):
                 with ui.element("div").classes("stack"):
-                    ui.label("Vos prochains créneaux").classes("section-title")
+                    with ui.row().classes("merchant-heading"):
+                        ui.label("Vos commerçants").classes("section-title")
+                        ui.button(
+                            "Ajouter un commerçant",
+                            on_click=lambda: open_merchant_editor(
+                                merchant_service, dashboard.refresh
+                            ),
+                        ).props("outline")
                     with ui.element("div").classes("merchant-grid"):
                         for merchant in merchants:
-                            with ui.card().classes("panel"):
+                            state_class = (
+                                "merchant-disabled"
+                                if not merchant.active
+                                else "merchant-paused"
+                                if not merchant.watched
+                                else ""
+                            )
+                            with ui.card().classes(f"panel {state_class}"):
                                 ui.label(merchant.name).classes("merchant-name")
-                                upcoming = next_window(merchant.windows, now, settings.timezone)
+                                tracking = merchant.active and merchant.watched
+                                ui.label(
+                                    "Désactivé"
+                                    if not merchant.active
+                                    else "Suivi en pause"
+                                    if not merchant.watched
+                                    else "Suivi activé"
+                                ).classes("merchant-state")
+                                upcoming = (
+                                    next_window(merchant.windows, now, settings.timezone)
+                                    if tracking
+                                    else None
+                                )
                                 ui.label(
                                     upcoming.astimezone(local_zone).strftime("%d/%m · %H:%M")
                                     if upcoming
                                     else "Aucun créneau"
+                                    if tracking
+                                    else "Aucun suivi prévu"
                                 ).classes("next-window")
                                 ui.label(
                                     "Prochaine fenêtre · heure de Paris"
                                     if settings.timezone == "Europe/Paris"
                                     else f"Prochaine fenêtre · {settings.timezone}"
                                 ).classes("muted")
+                                watch_switch = ui.switch(
+                                    "Suivre ce commerçant",
+                                    value=merchant.watched,
+                                    on_change=lambda event, key=merchant.id: set_merchant_state(
+                                        key, "watched", bool(event.value)
+                                    ),
+                                )
+                                watch_switch.set_enabled(merchant.active)
                                 ui.separator()
-                                for window in merchant.windows[:3]:
+                                for window in merchant.windows:
                                     origin = (
                                         "Manuel"
                                         if window.source == "manual"
-                                        else f"Estimé · {window.sample_count} observations"
+                                        else f"Estimé · {window.sample_count} journées observées"
                                     )
                                     ui.label(
                                         f"{weekdays[window.weekday]} "
                                         f"{window.start:%H:%M}–{window.end:%H:%M}"
                                     ).style("font-weight: 650")
                                     ui.label(origin).classes("muted")
+                                if not merchant.windows:
+                                    ui.label("Aucun horaire défini pour le moment.").classes(
+                                        "muted"
+                                    )
+                                with ui.element("div").classes("merchant-actions"):
+                                    ui.button(
+                                        "Modifier",
+                                        on_click=lambda selected=merchant: open_merchant_editor(
+                                            merchant_service, dashboard.refresh, selected
+                                        ),
+                                    ).props("flat")
+                                    ui.button(
+                                        "Désactiver" if merchant.active else "Réactiver",
+                                        on_click=lambda key=merchant.id, active=merchant.active: (
+                                            set_merchant_state(key, "active", not active)
+                                        ),
+                                    ).props("flat")
+                                    ui.button(
+                                        "Recalculer les estimations",
+                                        on_click=lambda key=merchant.id: refresh_estimates(key),
+                                    ).props("flat dense")
                         if not merchants:
-                            ui.label("Aucun commerçant de démonstration.").classes("muted")
+                            ui.label(
+                                "Ajoutez votre premier commerçant pour préparer son suivi."
+                            ).classes("muted")
                     with ui.card().classes("panel"):
                         ui.label("Derniers relevés").classes("section-title")
                         for record in observations[:5]:

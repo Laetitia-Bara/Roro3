@@ -4,6 +4,7 @@ import json
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import datetime, time
 from pathlib import Path
 from uuid import uuid4
@@ -17,6 +18,7 @@ from roro3.models import (
     ScheduleWindow,
     timestamp,
     utc,
+    validate_manual_windows,
 )
 
 SCHEMA = """
@@ -26,7 +28,9 @@ CREATE TABLE IF NOT EXISTS runtime (
     reserve INTEGER NOT NULL, dry_run INTEGER NOT NULL, stopped INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS merchants (
-    id TEXT PRIMARY KEY, name TEXT NOT NULL, windows TEXT NOT NULL
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, windows TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)),
+    watched INTEGER NOT NULL DEFAULT 1 CHECK(watched IN (0,1))
 );
 CREATE TABLE IF NOT EXISTS observations (
     id INTEGER PRIMARY KEY,
@@ -47,6 +51,48 @@ CREATE TABLE IF NOT EXISTS attempts (
 """
 
 
+def _encode_windows(windows: tuple[ScheduleWindow, ...]) -> str:
+    return json.dumps(
+        [
+            {
+                "weekday": window.weekday,
+                "start": window.start.isoformat(),
+                "end": window.end.isoformat(),
+                "source": window.source,
+                "sample_count": window.sample_count,
+            }
+            for window in windows
+        ],
+        ensure_ascii=False,
+    )
+
+
+def _merchant(row: sqlite3.Row) -> Merchant:
+    return Merchant(
+        row["id"],
+        row["name"],
+        tuple(
+            ScheduleWindow(
+                weekday=w["weekday"],
+                start=time.fromisoformat(w["start"]),
+                end=time.fromisoformat(w["end"]),
+                source=w["source"],
+                sample_count=w["sample_count"],
+            )
+            for w in json.loads(row["windows"])
+        ),
+        active=bool(row["active"]),
+        watched=bool(row["watched"]),
+    )
+
+
+def _require_merchant(db: sqlite3.Connection, identifier: str) -> Merchant:
+    row = db.execute("SELECT * FROM merchants WHERE id=?", (identifier,)).fetchone()
+    if row is None:
+        raise ValueError("Ce commerçant n'existe plus. Actualisez la liste.")
+    return _merchant(row)
+
+
 class Repository:
     def __init__(self, path: Path, initial_policy: RunPolicy | None = None) -> None:
         self.path = Path(path)
@@ -54,15 +100,31 @@ class Repository:
         initial = initial_policy or RunPolicy()
         with self.connection() as db:
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1):
+            if version not in (0, 1, 2):
                 raise ValueError("Version de base non prise en charge")
             db.execute("PRAGMA journal_mode=WAL")
-            db.executescript(SCHEMA)
+            db.execute("BEGIN IMMEDIATE")
+            version = db.execute("PRAGMA user_version").fetchone()[0]
+            if version not in (0, 1, 2):
+                raise ValueError("Version de base non prise en charge")
+            # Schéma statique sans triggers ; éviter le commit implicite d'executescript.
+            for statement in SCHEMA.split(";"):
+                if statement.strip():
+                    db.execute(statement)
+            if version == 1:
+                db.execute(
+                    "ALTER TABLE merchants ADD COLUMN active INTEGER NOT NULL "
+                    "DEFAULT 1 CHECK(active IN (0,1))"
+                )
+                db.execute(
+                    "ALTER TABLE merchants ADD COLUMN watched INTEGER NOT NULL "
+                    "DEFAULT 1 CHECK(watched IN (0,1))"
+                )
             db.execute(
                 "INSERT OR IGNORE INTO runtime VALUES(1,?,?,?,?,0)",
                 (initial.observe, initial.notify, initial.reserve, initial.dry_run),
             )
-            db.execute("PRAGMA user_version=1")
+            db.execute("PRAGMA user_version=2")
 
     @contextmanager
     def connection(self) -> Iterator[sqlite3.Connection]:
@@ -99,43 +161,74 @@ class Repository:
             db.execute("UPDATE runtime SET stopped=? WHERE id=1", (bool(stopped),))
 
     def upsert_merchant(self, merchant: Merchant) -> None:
-        windows = [
-            {
-                "weekday": window.weekday,
-                "start": window.start.isoformat(),
-                "end": window.end.isoformat(),
-                "source": window.source,
-                "sample_count": window.sample_count,
-            }
-            for window in merchant.windows
-        ]
         with self.connection() as db:
             db.execute(
-                "INSERT INTO merchants VALUES(?,?,?) ON CONFLICT(id) DO UPDATE "
-                "SET name=excluded.name,windows=excluded.windows",
-                (merchant.id, merchant.name, json.dumps(windows, ensure_ascii=False)),
+                "INSERT INTO merchants(id,name,windows,active,watched) VALUES(?,?,?,?,?) "
+                "ON CONFLICT(id) DO UPDATE SET name=excluded.name,windows=excluded.windows,"
+                "active=excluded.active,watched=excluded.watched",
+                (
+                    merchant.id,
+                    merchant.name,
+                    _encode_windows(merchant.windows),
+                    merchant.active,
+                    merchant.watched,
+                ),
             )
 
     def list_merchants(self) -> list[Merchant]:
         with self.connection() as db:
             rows = db.execute("SELECT * FROM merchants ORDER BY name").fetchall()
-        return [
-            Merchant(
-                row["id"],
-                row["name"],
-                tuple(
-                    ScheduleWindow(
-                        weekday=w["weekday"],
-                        start=time.fromisoformat(w["start"]),
-                        end=time.fromisoformat(w["end"]),
-                        source=w["source"],
-                        sample_count=w["sample_count"],
-                    )
-                    for w in json.loads(row["windows"])
-                ),
+        return [_merchant(row) for row in rows]
+
+    def get_merchant(self, identifier: str) -> Merchant | None:
+        with self.connection() as db:
+            row = db.execute("SELECT * FROM merchants WHERE id=?", (identifier,)).fetchone()
+        return _merchant(row) if row is not None else None
+
+    def update_merchant_details(
+        self, identifier: str, name: str, manual_windows: tuple[ScheduleWindow, ...]
+    ) -> Merchant:
+        validate_manual_windows(manual_windows)
+        Merchant(identifier, name, manual_windows)
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            current = _require_merchant(db, identifier)
+            estimated = tuple(w for w in current.windows if w.source == "estimated")
+            updated = replace(current, name=name.strip(), windows=manual_windows + estimated)
+            db.execute(
+                "UPDATE merchants SET name=?,windows=? WHERE id=?",
+                (updated.name, _encode_windows(updated.windows), identifier),
             )
-            for row in rows
-        ]
+        return updated
+
+    def _set_merchant_flag(self, identifier: str, field: str, value: bool) -> Merchant:
+        if field not in {"active", "watched"} or type(value) is not bool:
+            raise ValueError("État de commerçant invalide")
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            current = _require_merchant(db, identifier)
+            db.execute(f"UPDATE merchants SET {field}=? WHERE id=?", (value, identifier))
+            return replace(current, **{field: value})
+
+    def set_merchant_active(self, identifier: str, active: bool) -> Merchant:
+        return self._set_merchant_flag(identifier, "active", active)
+
+    def set_merchant_watched(self, identifier: str, watched: bool) -> Merchant:
+        return self._set_merchant_flag(identifier, "watched", watched)
+
+    def replace_estimates(self, identifier: str, windows: tuple[ScheduleWindow, ...]) -> Merchant:
+        if any(w.source != "estimated" for w in windows):
+            raise ValueError("Seuls des créneaux estimés peuvent remplacer les estimations")
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            current = _require_merchant(db, identifier)
+            manual = tuple(w for w in current.windows if w.source == "manual")
+            updated = replace(current, windows=manual + windows)
+            db.execute(
+                "UPDATE merchants SET windows=? WHERE id=?",
+                (_encode_windows(updated.windows), identifier),
+            )
+            return updated
 
     def record_observation(self, offer: Offer, now: datetime) -> str:
         observed_at, pickup = timestamp(now), timestamp(offer.pickup_start)
@@ -174,6 +267,15 @@ class Repository:
                 return ReservationResult("stopped")
             if not state["reserve"]:
                 return ReservationResult("disabled")
+            merchant = db.execute(
+                "SELECT active,watched FROM merchants WHERE id=?", (offer.merchant_id,)
+            ).fetchone()
+            if merchant is None:
+                return ReservationResult("unknown_merchant")
+            if not merchant["active"]:
+                return ReservationResult("merchant_disabled")
+            if not merchant["watched"]:
+                return ReservationResult("not_watched")
             if offer.available == 0 or utc(now) >= utc(offer.pickup_end):
                 return ReservationResult("unavailable")
             preview = bool(state["dry_run"])

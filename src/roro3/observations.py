@@ -19,12 +19,19 @@ class MonitorService:
         policy = self.repository.get_policy()
         if not (policy.observe or policy.notify or policy.reserve):
             return CycleResult()
+        if not any(m.active and m.watched for m in self.repository.list_merchants()):
+            return CycleResult()
         observations, notifications = 0, 0
         results = []
         for offer in self.connector.get_offers():
             if self.repository.is_stopped():
                 return CycleResult(observations, notifications, tuple(results), stopped=True)
+            merchant = self.repository.get_merchant(offer.merchant_id)
+            if merchant is None or not merchant.active or not merchant.watched:
+                continue
             policy = self.repository.get_policy()
+            if not (policy.observe or policy.notify or policy.reserve):
+                break
             # Chaque contrôle utile aux autres fonctions enrichit aussi l'historique.
             event = self.repository.record_observation(offer, now)
             observations += event != "duplicate"

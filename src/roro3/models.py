@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime, time
 from enum import StrEnum
+from itertools import pairwise
 
 
 def utc(value: datetime) -> datetime:
@@ -33,11 +34,19 @@ class ScheduleWindow:
     sample_count: int = 0
 
     def __post_init__(self) -> None:
-        if not 0 <= self.weekday <= 6 or self.start >= self.end:
-            raise ValueError("Créneau diurne avec jour entre 0 et 6 requis")
+        if type(self.weekday) is not int or not 0 <= self.weekday <= 6:
+            raise ValueError("Le jour doit être un entier entre 0 et 6")
+        if not isinstance(self.start, time) or not isinstance(self.end, time):
+            raise ValueError("Les heures de début et de fin sont obligatoires")
         if self.start.tzinfo is not None or self.end.tzinfo is not None:
             raise ValueError("Les heures de créneau sont locales, sans décalage fixe")
-        if self.source not in {"manual", "estimated"} or self.sample_count < 0:
+        if self.start >= self.end:
+            raise ValueError("La fin doit suivre le début, sans traverser minuit")
+        if (
+            self.source not in {"manual", "estimated"}
+            or type(self.sample_count) is not int
+            or self.sample_count < 0
+        ):
             raise ValueError("Origine de créneau invalide")
 
 
@@ -46,10 +55,30 @@ class Merchant:
     id: str
     name: str
     windows: tuple[ScheduleWindow, ...] = ()
+    active: bool = True
+    watched: bool = True
 
     def __post_init__(self) -> None:
-        if not self.id.strip() or not self.name.strip():
-            raise ValueError("Identifiant et nom de commerçant obligatoires")
+        if not isinstance(self.id, str) or not self.id.strip():
+            raise ValueError("Identifiant de commerçant obligatoire")
+        if not isinstance(self.name, str) or not 1 <= len(self.name.strip()) <= 100:
+            raise ValueError("Le nom du commerçant doit contenir entre 1 et 100 caractères")
+        if type(self.active) is not bool or type(self.watched) is not bool:
+            raise ValueError("Les états actif et suivi doivent être des booléens")
+        if not all(isinstance(window, ScheduleWindow) for window in self.windows):
+            raise ValueError("Les créneaux du commerçant sont invalides")
+
+
+def validate_manual_windows(windows: tuple[ScheduleWindow, ...]) -> None:
+    """Valider avant écriture ; les estimations ne sont jamais saisies à la main."""
+    if any(
+        not isinstance(window, ScheduleWindow) or window.source != "manual" for window in windows
+    ):
+        raise ValueError("Seuls des créneaux manuels peuvent être saisis")
+    ordered = sorted(windows, key=lambda window: (window.weekday, window.start, window.end))
+    for previous, current in pairwise(ordered):
+        if previous.weekday == current.weekday and current.start < previous.end:
+            raise ValueError("Deux créneaux manuels du même jour ne doivent pas se chevaucher")
 
 
 @dataclass(frozen=True)

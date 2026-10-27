@@ -35,8 +35,8 @@ aucune surveillance en arrière-plan.
 ## Prévenir les actions involontaires
 
 Les modes sans réservation et le dry-run ne peuvent pas appeler la méthode de réservation.
-L'arrêt global et les tentatives sont persistants. La réservation vérifie à nouveau
-la politique dans une transaction SQLite.
+L'arrêt global, la sélection des commerçants et les tentatives sont persistants. La
+réservation vérifie à nouveau la politique et la sélection dans une transaction SQLite.
 Un résultat incertain reste bloquant ; aucune tentative n'est répétée aveuglément.
 
 ## En cas de fuite

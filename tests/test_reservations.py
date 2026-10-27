@@ -14,7 +14,7 @@ from threading import Barrier
 
 import pytest
 
-from roro3.models import AttemptStatus, Offer, RunPolicy
+from roro3.models import AttemptStatus, Merchant, Offer, RunPolicy
 from roro3.observations import MonitorService
 from roro3.ports import ReservationRejected
 from roro3.reservations import ReservationService
@@ -38,7 +38,9 @@ def offer() -> Offer:
 
 @pytest.fixture
 def database_path(tmp_path: Path) -> Path:
-    return tmp_path / "reservations.sqlite3"
+    path = tmp_path / "reservations.sqlite3"
+    Repository(path).upsert_merchant(Merchant("demo-bakery", "Boulangerie fictive"))
+    return path
 
 
 def automatic_policy() -> RunPolicy:

@@ -31,11 +31,14 @@ Le serveur écoute explicitement sur `127.0.0.1`. Le partage NiceGUI On Air est 
 
 Cette liaison locale évite de rendre l'écran accessible aux autres appareils du réseau. L'interface n'est pas conçue pour un déploiement public ou multi-utilisateur ; les protections nécessaires à un tel usage ne font pas partie de ce jalon.
 
-## Limites assumées
+## Périmètre actuel
 
-Pas de formulaire complet de configuration, d'édition des commerçants, de connexion réelle, ni de surveillance permanente dans cette première interface. Les prochaines évolutions pourront être ajoutées aux services existants après validation de ce squelette et de ses tests.
+Le deuxième jalon ajoute un formulaire de commerçants et de créneaux manuels, la sélection
+du suivi, la désactivation/réactivation et le recalcul des estimations. Les estimations
+restent en lecture seule dans le formulaire. L'écran ne comporte toujours ni connexion
+réelle ni surveillance permanente. [Détail du deuxième jalon](JALON_02_COMMERCANTS.md).
 
-## Vérification du premier écran
+## Vérification du premier écran — premier jalon
 
 Contrôle effectué le 27 octobre 2026 avec un navigateur Edge sans fenêtre, piloté par Playwright, sur le serveur local de démonstration. Toutes les requêtes de page vers des hôtes extérieurs à `127.0.0.1` ou `localhost` étaient bloquées pendant le contrôle ; aucune requête extérieure n'a été tentée et aucune erreur JavaScript n'a été observée.
 

@@ -1,4 +1,4 @@
-# Architecture du premier jalon
+# Architecture de Roro 3.0
 
 ## Responsabilités
 
@@ -7,12 +7,14 @@
 | `models` | Modèles typés, instants UTC, politiques indépendantes |
 | `config` | Configuration validée ; refus de tout connecteur autre que simulé |
 | `storage` | SQLite, schéma versionné, historique et état persistant |
+| `merchants` | Création, édition, activation et sélection ; créneaux manuels et estimés séparés |
 | `ports` / `simulator` | Contrats et seules implémentations externes disponibles : factices |
 | `observations` | Un cycle partagé entre collecte, notification et décision |
 | `analysis` | Estimation descriptive par jour et quart d'heure |
 | `planning` | Prochaine fenêtre en calendrier Europe/Paris |
 | `reservations` | Frontière unique d'action, claim et résultat persistant |
 | `ui` | Adaptateur NiceGUI local optionnel |
+| `merchant_ui` | Formulaire temporaire validé, sans écriture avant Enregistrer |
 | `demo` / `__main__` | Données fictives, composition et commandes reproductibles |
 
 L'interface ne contient pas la décision de réservation. Le cœur n'importe jamais NiceGUI
@@ -27,6 +29,9 @@ l'admission d'une tentative. `BEGIN IMMEDIATE` et une contrainte unique empêche
 instances du service de prendre le même panier/créneau pour le même compte fictif.
 La clé inclut l'instant de début de retrait en UTC et le type aperçu/simulation.
 Un commerçant n'est donc pas bloqué définitivement pour tous ses paniers à venir.
+La même transaction vérifie aussi que le commerçant existe, est actif et est sélectionné.
+Le filtrage dans l'interface n'est jamais la seule protection. Le suivi ignore ces offres
+avant d'enregistrer un relevé ou d'envoyer une notification.
 
 Le claim est enregistré avant l'appel du simulateur. Une tentative `pending`, `unknown`
 ou `failed` reste bloquante pour cette clé ; aucune reprise aveugle n'est effectuée. Un futur
@@ -38,6 +43,30 @@ L'arrêt global et les modes sont lus depuis SQLite à chaque admission. Une act
 admise peut se terminer après un arrêt ; l'arrêt ne vaut ni annulation ni paiement. Les
 changements de politique ne retirent pas les tentatives. Une base existante conserve son
 état même si les variables d'environnement ont changé.
+
+## Gestion et migration des commerçants
+
+Le schéma SQLite 2 ajoute les champs `active` et `watched`. La migration depuis le
+schéma 1 conserve les lignes, les historiques et les modes et donne aux anciens
+commerçants l'état suivi qu'ils avaient implicitement. Les ajouts de colonnes et le
+changement de version sont atomiques. Une version inconnue est refusée sans dégradation.
+
+L'édition des horaires manuels relit le commerçant sous transaction, puis modifie
+uniquement le nom et les créneaux manuels ; elle conserve les estimations actuelles.
+Les commandes d'activation/sélection ne modifient que leur propre champ. Le recalcul
+des estimations préserve à son tour les horaires manuels et les états. Aucun de ces
+gestes ne déclenche de cycle ni ne modifie la politique globale.
+
+Un commerçant désactivé reste consultable, avec tout son historique. Son choix de suivi
+est conservé pour une réactivation ultérieure. Il n'existe pas de suppression destructive
+dans l'interface. Les créneaux manuels identiques ou qui se chevauchent sont refusés ;
+les créneaux adjacents et les recouvrements entre un manuel et une estimation sont permis.
+
+Le simulateur lit le catalogue au moment du contrôle. Ses identifiants reposent sur les
+identités immuables des commerces, pas sur leur nom ou position. Le retrait quotidien
+est stable, en réutilisant une occurrence déjà connue quand elle existe, pour préserver
+la continuité avec la première démonstration. Une horloge injectable garde la CLI
+reproductible tout en permettant à l'interface de changer de journée sans redémarrage.
 
 `dry_run` crée un aperçu seulement, sans méthode de mutation du connecteur. Désactiver
 `dry_run` autorise uniquement une commande au simulateur : aucun connecteur réel ne fait
@@ -64,8 +93,8 @@ Ces limites sont explicites et testables.
 
 ## Étapes suivantes, hors de ce jalon
 
-1. Édition complète des commerçants et créneaux, couverture des contrôles et qualité des données.
-2. Planification d'un suivi fictif avec cadence bornée et arrêt coopératif.
+1. Planification d'un suivi fictif avec cadence bornée et arrêt coopératif.
+2. Couverture des contrôles et qualité des recommandations statistiques.
 3. Suivi simulé des annulations/expirations et des résultats en attente.
 4. Adaptateur de notification réel si explicitement activé, avec protection des secrets.
 5. Toute connexion de plateforme uniquement après confirmation d'un mécanisme autorisé.

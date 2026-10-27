@@ -37,6 +37,7 @@ def test_merchants_and_observation_transitions_survive_restart(tmp_path):
 
 def test_notifications_deduplicate_an_available_episode(tmp_path):
     repo = Repository(tmp_path / "history.sqlite3")
+    repo.upsert_merchant(Merchant("shop", "Commerce fictif"))
     repo.set_policy(RunPolicy(observe=False, notify=True))
     offer = Offer("bag", "shop", NOW + timedelta(hours=1), NOW + timedelta(hours=2), 2)
     connector, notifier = SimulatedConnector([offer]), MemoryNotifier()

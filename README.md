@@ -3,8 +3,8 @@
 Un projet Python familial pour étudier les disponibilités de paniers, proposer des
 créneaux de suivi et démontrer un parcours de réservation robuste **sur données fictives**.
 
-Ce premier jalon livre le socle architectural, une démonstration locale et les invariants
-de sécurité. Aucun compte réel, token ou accès à une plateforme n'est nécessaire.
+Cette version livre un cœur modulaire, une démonstration locale configurable et les
+invariants de sécurité. Aucun compte réel, token ou accès à une plateforme n'est nécessaire.
 Il ne contient ni client Too Good To Go, ni connexion Telegram, ni paiement.
 
 ## Installation — Windows / PowerShell
@@ -34,10 +34,32 @@ l'installation du projet :
 
 ## Démonstration
 
-Trois commerces inventés, deux paniers disponibles, un historique fictif de trois mardis
-et des fenêtres manuelles/estimées. La CLI utilise une horloge fixe au 27 octobre 2026
+Le jeu initial comprend trois commerces inventés, deux paniers disponibles, un historique
+fictif de trois mardis et des fenêtres manuelles/estimées. La CLI utilise une horloge fixe au 27 octobre 2026
 pour rendre les résultats reproductibles. Aucun contrôle périodique ne démarre tout seul.
 L'écran déclenche un cycle fictif uniquement sur demande.
+
+## Commerçants et créneaux
+
+Dans l'interface, **Ajouter un commerçant** ouvre un formulaire avec un nom et autant
+de plages jour/début/fin que nécessaire. Un commerçant peut être enregistré sans horaire.
+Les plages du même jour ne doivent ni se chevaucher ni traverser minuit. Une erreur
+laisse le formulaire ouvert ; **Annuler** ne sauvegarde rien.
+
+**Modifier** permet de renommer le commerçant et d'éditer ses horaires manuels. Les
+créneaux estimés restent distincts et ne sont jamais écrasés par le formulaire.
+**Recalculer les estimations** actualise ces derniers à partir de l'historique disponible.
+
+**Suivre ce commerçant** sélectionne les commerces inclus dans les prochains contrôles.
+**Désactiver** conserve le commerce, ses horaires et tout son historique, mais empêche
+son suivi ; **Réactiver** retrouve son choix de suivi précédent. Ces réglages sont
+persistants et ne lancent jamais un cycle tout seuls. Un commerce inconnu, désactivé
+ou non suivi est également bloqué à la frontière de réservation, indépendamment de l'écran.
+
+Le catalogue fictif prend en compte les ajouts sans redémarrage. Les identifiants et les
+créneaux de retrait restent stables pour une même journée, même après un renommage ou
+un redémarrage. L'écran suit la date courante ; la CLI conserve son scénario fixe.
+[Parcours et limites du deuxième jalon](docs/JALON_02_COMMERCANTS.md).
 
 ```powershell
 .\.venv\Scripts\python.exe -m roro3 demo --database data\autre-demo.sqlite3
@@ -80,7 +102,8 @@ est un adaptateur optionnel. [Architecture, limites et prochaines étapes](docs/
 ```
 
 Les tests couvrent les modes sans action, le dry-run, l'arrêt persistant, les doublons
-au redémarrage et en concurrence, les résultats inconnus, l'historique et les horaires.
+au redémarrage et en concurrence, les résultats inconnus, l'historique, la migration
+SQLite, l'édition des commerçants, leur sélection et la validation des horaires.
 Aucun test n'envoie de commande externe. La démonstration se teste avec le réseau bloqué.
 
 ## Limites du jalon

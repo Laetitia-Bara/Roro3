@@ -1,6 +1,6 @@
 """Services factices : pas d'import réseau, de compte ou de token."""
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from roro3.models import Offer
 from roro3.ports import ReservationRejected
@@ -10,12 +10,17 @@ class SimulatedConnector:
     is_simulated = True
     account_id = "demo-family"
 
-    def __init__(self, offers: Sequence[Offer] = ()) -> None:
+    def __init__(
+        self,
+        offers: Sequence[Offer] = (),
+        offer_source: Callable[[], Sequence[Offer]] | None = None,
+    ) -> None:
         self.offers = tuple(offers)
+        self._offer_source = offer_source
         self.reserve_calls: list[Offer] = []
 
     def get_offers(self) -> tuple[Offer, ...]:
-        return self.offers
+        return tuple(self._offer_source()) if self._offer_source is not None else self.offers
 
     def reserve(self, offer: Offer) -> str:
         if offer.available == 0:
