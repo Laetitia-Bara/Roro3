@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -37,6 +38,8 @@ body { background: #f7f5ef; color: #243b31; font-family: 'Segoe UI', Arial, sans
 .metric-number { font-size: 27px; font-weight: 750; line-height: 1.2; }
 .history-line { width: 100%; padding: 9px 0; border-bottom: 1px solid #edf0e9; }
 .state-line { font-size: 13px; font-weight: 650; color: #3f6e5a; }
+.scheduler-state { font-size: 17px; font-weight: 700; color: #3f6e5a; }
+.scheduler-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .footer { font-size: 12px; color: #66786e; }
 .q-btn { border-radius: 12px; text-transform: none; font-weight: 650; }
 .q-toggle__label { font-size: 14px; }
@@ -76,13 +79,20 @@ def run(settings: Settings, port: int = 8080, show: bool = True) -> None:
     from .merchant_ui import open_merchant_editor
     from .merchants import MerchantService
     from .planning import next_window
+    from .scheduler import SchedulerService
+    from .scheduler_ui import register_scheduler, render_scheduler_panel
+
+    def clock() -> datetime:
+        return datetime.now(UTC)
 
     application = build_demo(
         settings.database_path,
-        now=datetime.now(UTC),
+        now=clock(),
         initial_policy=settings.policy,
-        clock=lambda: datetime.now(UTC),
+        clock=clock,
     )
+    scheduler = SchedulerService(application.repo, application.monitor, timezone=settings.timezone)
+    register_scheduler(scheduler, clock)
     local_zone = ZoneInfo(settings.timezone)
     merchant_service = MerchantService(application.repo, settings.timezone)
     weekdays = ("Lun.", "Mar.", "Mer.", "Jeu.", "Ven.", "Sam.", "Dim.")
@@ -94,6 +104,8 @@ def run(settings: Settings, port: int = 8080, show: bool = True) -> None:
     def index() -> None:
         ui.colors(primary="#3f6e5a", secondary="#748e79", negative="#a94b48")
         ui.add_css(_CSS)
+        live: dict[str, Callable[[], None]] = {}
+        previous_signature = None
 
         def update_policy(field: str, value: bool) -> None:
             current = application.repo.get_policy()
@@ -136,23 +148,34 @@ def run(settings: Settings, port: int = 8080, show: bool = True) -> None:
             except ValueError as error:
                 ui.notify(str(error), type="negative")
                 return
-            dashboard.refresh()
             ui.notify(
                 "Estimations recalculées à partir de l'historique disponible.", type="positive"
             )
+            dashboard.refresh()
 
         @ui.refreshable
         def dashboard() -> None:
-            now = datetime.now(UTC)
+            now = clock()
             policy = application.repo.get_policy()
             stopped = application.repo.is_stopped()
             merchants = application.repo.list_merchants()
-            observations = application.repo.list_observations()
-            attempts = application.repo.list_attempts()
-            names = {merchant.id: merchant.name for merchant in merchants}
-            offer_names = {
-                record["offer_id"]: names.get(record["merchant_id"], "Panier fictif")
-                for record in observations
+            live.clear()
+
+            def offer_names() -> dict[str, str]:
+                names = {
+                    merchant.id: merchant.name for merchant in application.repo.list_merchants()
+                }
+                return {
+                    record["offer_id"]: names.get(record["merchant_id"], "Panier fictif")
+                    for record in application.repo.list_observations()
+                }
+
+            statuses = {
+                "preview": "Simulation sans commande",
+                "pending": "En cours",
+                "confirmed": "Commande fictive confirmée",
+                "failed": "Échec fictif",
+                "unknown": "Résultat à vérifier",
             }
 
             with ui.row().classes("topbar"):
@@ -167,26 +190,47 @@ def run(settings: Settings, port: int = 8080, show: bool = True) -> None:
                 with ui.element("div").classes("hero-actions"):
                     cycle = ui.button("Lancer un cycle fictif", on_click=run_cycle)
                     cycle.set_enabled(not stopped)
-                    if stopped:
-                        ui.button("Reprendre le suivi", on_click=lambda: set_stopped(False)).props(
-                            "outline"
-                        )
-                    else:
-                        ui.button(
-                            "Arrêt global", on_click=lambda: set_stopped(True), color="negative"
-                        ).props("outline")
-                ui.label("Suivi arrêté" if stopped else "Prêt · cycles manuels uniquement").classes(
-                    "state-line"
-                )
-                with ui.element("div").classes("metrics"):
-                    for value, label in (
-                        (sum(m.active and m.watched for m in merchants), "commerçants suivis"),
-                        (len(observations), "relevés conservés"),
-                        (len(attempts), "tentatives conservées"),
-                    ):
-                        with ui.column().style("gap: 2px"):
-                            ui.label(str(value)).classes("metric-number")
-                            ui.label(label).classes("muted")
+                    global_stop = ui.button(
+                        "Reprendre le suivi" if stopped else "Arrêt global",
+                        on_click=lambda: set_stopped(not application.repo.is_stopped()),
+                        color="negative",
+                    ).props("outline")
+                hero_state = ui.label("").classes("state-line")
+
+                def refresh_controls() -> None:
+                    stopped_now = application.repo.is_stopped()
+                    state = scheduler.status(clock())
+                    cycle.set_enabled(not stopped_now)
+                    global_stop.set_text("Reprendre le suivi" if stopped_now else "Arrêt global")
+                    hero_state.set_text(
+                        "Suivi arrêté"
+                        if stopped_now
+                        else "Surveillance planifiée active"
+                        if state.running
+                        else "Prêt · contrôle manuel disponible"
+                    )
+
+                live["controls"] = refresh_controls
+                refresh_controls()
+
+                @ui.refreshable
+                def metrics() -> None:
+                    current_merchants = application.repo.list_merchants()
+                    with ui.element("div").classes("metrics"):
+                        for value, label in (
+                            (
+                                sum(m.active and m.watched for m in current_merchants),
+                                "commerçants suivis",
+                            ),
+                            (len(application.repo.list_observations()), "relevés conservés"),
+                            (len(application.repo.list_attempts()), "tentatives conservées"),
+                        ):
+                            with ui.column().style("gap: 2px"):
+                                ui.label(str(value)).classes("metric-number")
+                                ui.label(label).classes("muted")
+
+                metrics()
+                live["metrics"] = metrics.refresh
 
             with ui.element("div").classes("dashboard"):
                 with ui.element("div").classes("stack"):
@@ -279,21 +323,33 @@ def run(settings: Settings, port: int = 8080, show: bool = True) -> None:
                             ui.label(
                                 "Ajoutez votre premier commerçant pour préparer son suivi."
                             ).classes("muted")
-                    with ui.card().classes("panel"):
-                        ui.label("Derniers relevés").classes("section-title")
-                        for record in observations[:5]:
-                            with ui.column().classes("history-line").style("gap: 2px"):
-                                ui.label(names.get(record["merchant_id"], "Commerçant fictif"))
+
+                    @ui.refreshable
+                    def observation_history() -> None:
+                        observations = application.repo.list_observations()
+                        names = {
+                            merchant.id: merchant.name
+                            for merchant in application.repo.list_merchants()
+                        }
+                        with ui.card().classes("panel"):
+                            ui.label("Derniers relevés").classes("section-title")
+                            for record in observations[:5]:
+                                with ui.column().classes("history-line").style("gap: 2px"):
+                                    ui.label(names.get(record["merchant_id"], "Commerçant fictif"))
+                                    ui.label(
+                                        f"{record['available']} panier(s) · "
+                                        f"{local_timestamp(record['observed_at'])}"
+                                    ).classes("muted")
+                            if not observations:
                                 ui.label(
-                                    f"{record['available']} panier(s) · "
-                                    f"{local_timestamp(record['observed_at'])}"
+                                    "Lancez un cycle fictif pour observer les disponibilités."
                                 ).classes("muted")
-                        if not observations:
-                            ui.label(
-                                "Lancez un premier cycle fictif pour observer les disponibilités."
-                            ).classes("muted")
+
+                    observation_history()
+                    live["observations"] = observation_history.refresh
 
                 with ui.element("div").classes("stack"):
+                    live["scheduler"] = render_scheduler_panel(scheduler, clock, settings.timezone)
                     with ui.card().classes("panel"):
                         ui.label("Ce qui est activé").classes("section-title")
                         for field, label in (
@@ -312,45 +368,76 @@ def run(settings: Settings, port: int = 8080, show: bool = True) -> None:
                         ui.label(
                             "Les modes sont indépendants. Aucun service réel n'est connecté."
                         ).classes("muted")
-                    with ui.card().classes("panel"):
-                        ui.label("Dernières tentatives").classes("section-title")
-                        statuses = {
-                            "preview": "Simulation sans commande",
-                            "pending": "En cours",
-                            "confirmed": "Commande fictive confirmée",
-                            "failed": "Échec fictif",
-                            "unknown": "Résultat à vérifier",
-                        }
-                        for record in attempts[:5]:
-                            ui.label(offer_names.get(record["offer_id"], "Panier fictif"))
-                            ui.label(
-                                statuses.get(record["status"], "Tentative enregistrée")
-                            ).classes("muted")
-                            ui.label(local_timestamp(record["created_at"])).classes("muted")
-                        if not attempts:
-                            ui.label(
-                                "Aucune tentative. Activez la réservation fictive "
-                                "pour explorer ce parcours."
-                            ).classes("muted")
-                    with ui.card().classes("panel"):
-                        ui.label("Journal de démonstration").classes("section-title")
-                        for message in application.notifier.messages[-3:]:
-                            text = message.removeprefix("[SIMULATION] ")
-                            for offer_id, merchant_name in offer_names.items():
-                                text = text.replace(offer_id, merchant_name)
-                            for code, label in statuses.items():
-                                if text.endswith(f": {code}"):
-                                    text = text.removesuffix(code) + label.lower()
-                            ui.label(text).classes("muted")
-                        if not application.notifier.messages:
-                            ui.label("Les notifications fictives apparaîtront ici.").classes(
-                                "muted"
-                            )
+
+                    @ui.refreshable
+                    def attempt_history() -> None:
+                        attempts = application.repo.list_attempts()
+                        names = offer_names()
+                        with ui.card().classes("panel"):
+                            ui.label("Dernières tentatives").classes("section-title")
+                            for record in attempts[:5]:
+                                ui.label(names.get(record["offer_id"], "Panier fictif"))
+                                ui.label(
+                                    statuses.get(record["status"], "Tentative enregistrée")
+                                ).classes("muted")
+                                ui.label(local_timestamp(record["created_at"])).classes("muted")
+                            if not attempts:
+                                ui.label(
+                                    "Aucune tentative. Activez la réservation fictive "
+                                    "pour explorer ce parcours."
+                                ).classes("muted")
+
+                    attempt_history()
+                    live["attempts"] = attempt_history.refresh
+
+                    @ui.refreshable
+                    def notification_history() -> None:
+                        names = offer_names()
+                        with ui.card().classes("panel"):
+                            ui.label("Journal de démonstration").classes("section-title")
+                            for message in application.notifier.messages[-3:]:
+                                text = message.removeprefix("[SIMULATION] ")
+                                for offer_id, merchant_name in names.items():
+                                    text = text.replace(offer_id, merchant_name)
+                                for code, label in statuses.items():
+                                    if text.endswith(f": {code}"):
+                                        text = text.removesuffix(code) + label.lower()
+                                ui.label(text).classes("muted")
+                            if not application.notifier.messages:
+                                ui.label("Les notifications fictives apparaîtront ici.").classes(
+                                    "muted"
+                                )
+
+                    notification_history()
+                    live["notifications"] = notification_history.refresh
             ui.label(
                 f"Données fictives · aucune réservation réelle · affichage {settings.timezone}"
             ).classes("footer")
 
         dashboard()
+
+        def refresh_live() -> None:
+            nonlocal previous_signature
+            # Ces mises à jour n'effacent ni les cartes ni un dialogue de saisie ouvert.
+            live["controls"]()
+            live["scheduler"]()
+            observations = application.repo.list_observations()
+            attempts = application.repo.list_attempts()
+            merchants = application.repo.list_merchants()
+            signature = (
+                len(observations),
+                observations[0]["id"] if observations else None,
+                len(attempts),
+                attempts[0]["updated_at"] if attempts else None,
+                tuple((m.id, m.name, m.active, m.watched) for m in merchants),
+                len(application.notifier.messages),
+            )
+            if signature != previous_signature:
+                for section in ("metrics", "observations", "attempts", "notifications"):
+                    live[section]()
+                previous_signature = signature
+
+        ui.timer(1.0, refresh_live, immediate=False)
 
     ui.run(
         host="127.0.0.1",

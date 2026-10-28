@@ -12,6 +12,8 @@
 | `observations` | Un cycle partagé entre collecte, notification et décision |
 | `analysis` | Estimation descriptive par jour et quart d'heure |
 | `planning` | Prochaine fenêtre en calendrier Europe/Paris |
+| `scheduler` | Admission des contrôles planifiés, cadence et session exclusive |
+| `scheduler_ui` | Minuteur applicatif unique et panneau de surveillance |
 | `reservations` | Frontière unique d'action, claim et résultat persistant |
 | `ui` | Adaptateur NiceGUI local optionnel |
 | `merchant_ui` | Formulaire temporaire validé, sans écriture avant Enregistrer |
@@ -68,6 +70,38 @@ est stable, en réutilisant une occurrence déjà connue quand elle existe, pour
 la continuité avec la première démonstration. Une horloge injectable garde la CLI
 reproductible tout en permettant à l'interface de changer de journée sans redémarrage.
 
+## Surveillance planifiée
+
+Le schéma SQLite 3 ajoute la fréquence, la session de surveillance et le dernier passage
+admis par commerçant. Les migrations 1/2 vers 3 sont transactionnelles et conservent les
+données existantes. Le démarrage reste une action explicite : construire un service
+ou ouvrir une page n'adopte jamais une ancienne session enregistrée.
+
+Un unique `app.timer` NiceGUI interroge le planificateur chaque seconde, indépendamment
+des clients. Les minuteurs de chaque page ne servent qu'à l'affichage. Les historiques
+et compteurs se mettent à jour sans recréer les formulaires en cours de saisie.
+
+Les instances partagent un bail exclusif de 15 secondes en SQLite, renouvelé à chaque
+tick, même hors créneau. La prise d'une session et l'admission des commerçants sont
+transactionnelles. Un contrôle est admis au plus une fois par commerçant et par cadence ;
+les fenêtres manuelles et estimées forment une union. La cadence est appliquée avant
+la recherche de la prochaine fenêtre, pour ne pas annoncer de passage hors créneau.
+
+Un bail expiré exige un nouveau démarrage explicite. Un ancien propriétaire ne peut pas
+arrêter la nouvelle session lors de sa fermeture. Après la lecture du simulateur, une
+garde rejette les résultats d'un propriétaire remplacé ou arrêté. Un cycle déjà admis
+peut toutefois terminer avant qu'un arrêt soit observé : aucune annulation rétroactive
+n'est promise. Le connecteur reste exclusivement simulé et synchrone.
+
+Le chemin planifié appelle l'orchestrateur avec une liste de commerçants dus et le mode
+`observation_only`. Ce chemin exige Observation et ne notifie ni ne réserve, quelle que
+soit la politique des cycles manuels. Désactiver Observation ou activer l'arrêt global
+désarme la session dans la même transaction ; réactiver un mode ne la redémarre pas.
+
+Les erreurs du contrôle consomment leur passage pour éviter une boucle de reprises.
+Seul un message générique est conservé ; l'exception externe brute n'est pas journalisée.
+Le prochain essai respecte la cadence et les fenêtres restantes.
+
 `dry_run` crée un aperçu seulement, sans méthode de mutation du connecteur. Désactiver
 `dry_run` autorise uniquement une commande au simulateur : aucun connecteur réel ne fait
 partie du paquet. Le contrôle de capacité complète l'absence d'implémentation réseau ;
@@ -93,8 +127,8 @@ Ces limites sont explicites et testables.
 
 ## Étapes suivantes, hors de ce jalon
 
-1. Planification d'un suivi fictif avec cadence bornée et arrêt coopératif.
-2. Couverture des contrôles et qualité des recommandations statistiques.
+1. Couverture des contrôles et qualité des recommandations statistiques.
+2. Notifications simulées intégrées à la planification, si ce périmètre est validé.
 3. Suivi simulé des annulations/expirations et des résultats en attente.
 4. Adaptateur de notification réel si explicitement activé, avec protection des secrets.
 5. Toute connexion de plateforme uniquement après confirmation d'un mécanisme autorisé.

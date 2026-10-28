@@ -294,7 +294,7 @@ def test_version_one_database_migrates_without_losing_data(tmp_path: Path) -> No
     assert reopened.list_observations() == migrated.list_observations()
     assert reopened.list_attempts() == migrated.list_attempts()
     with sqlite3.connect(path) as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 3
 
 
 def test_future_database_version_is_not_silently_downgraded(tmp_path: Path) -> None:

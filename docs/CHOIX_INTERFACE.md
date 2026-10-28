@@ -35,8 +35,11 @@ Cette liaison locale évite de rendre l'écran accessible aux autres appareils d
 
 Le deuxième jalon ajoute un formulaire de commerçants et de créneaux manuels, la sélection
 du suivi, la désactivation/réactivation et le recalcul des estimations. Les estimations
-restent en lecture seule dans le formulaire. L'écran ne comporte toujours ni connexion
-réelle ni surveillance permanente. [Détail du deuxième jalon](JALON_02_COMMERCANTS.md).
+restent en lecture seule dans le formulaire. Le troisième jalon ajoute une surveillance
+planifiée d'observation seule, avec un minuteur applicatif unique. Aucun mode ne démarre
+sans action explicite, et le serveur doit rester actif. L'écran ne comporte aucune
+connexion réelle. [Commerçants](JALON_02_COMMERCANTS.md),
+[planification](JALON_03_PLANIFICATION.md).
 
 ## Vérification du premier écran — premier jalon
 

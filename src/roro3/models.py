@@ -121,3 +121,19 @@ class CycleResult:
     notifications: int = 0
     reservations: tuple[ReservationResult, ...] = ()
     stopped: bool = False
+
+
+def validate_interval_seconds(value: int) -> None:
+    if type(value) is not int or not 15 <= value <= 3600:
+        raise ValueError("La fréquence doit être un entier entre 15 et 3600 secondes")
+
+
+@dataclass(frozen=True)
+class SchedulerStatus:
+    running: bool
+    owned: bool
+    state: str
+    interval_seconds: int
+    next_check: datetime | None = None
+    last_check: datetime | None = None
+    last_error: str | None = None

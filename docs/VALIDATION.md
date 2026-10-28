@@ -1,4 +1,4 @@
-# Validation de Roro 3.0 — 27 octobre 2026
+# Validation de Roro 3.0 — 28 octobre 2026
 
 Ce document décrit les vérifications exécutées localement. Les résultats GitHub Actions
 se consultent séparément dans l'onglet **Actions** du dépôt ; ils ne sont pas déduits des
@@ -15,8 +15,8 @@ puis utilisée depuis un autre dossier pour éviter de tester accidentellement l
 
 | Vérification | Résultat |
 |---|---|
-| Suite pytest, environnement de développement | 121 tests réussis |
-| Même suite, seconde installation non éditable | 121 tests réussis |
+| Suite pytest, environnement de développement | 164 tests réussis |
+| Même suite, seconde installation non éditable | 164 tests réussis |
 | Cohérence des dépendances, deux environnements | Aucun conflit |
 | Contrôle Ruff et formatage | Réussis |
 | Démonstration CLI sans réseau, répétée | Résultat stable, aucun ordre par défaut |
@@ -32,10 +32,17 @@ puis utilisée depuis un autre dossier pour éviter de tester accidentellement l
 | Formulaire invalide et annulation | Aucune écriture partielle |
 | Commerçant inconnu, désactivé ou non suivi | Aucune collecte ni réservation |
 | Catalogue fictif après ajout, renommage ou redémarrage | Identifiants et retrait journalier stables |
+| Planification avant démarrage explicite ou après redémarrage | Aucun contrôle |
+| Cadence, fenêtres et recouvrements manuels/estimés | Admissions bornées et dédupliquées |
+| Deux services concurrents, bail expiré et reprise | Une seule session admise |
+| Observation planifiée malgré les modes manuels de réservation | Aucun appel de notification ou réservation |
+| Arrêt global ou Observation désactivée puis réactivée | Pas de reprise automatique |
+| Résultat d'un propriétaire remplacé pendant le contrôle | Aucun relevé tardif enregistré |
 
 La version initiale avait 73 tests. Le deuxième jalon ajoute 48 cas portant sur les
 commerçants, la sélection, la migration, les formulaires et le catalogue dynamique.
-La version installée et vérifiée pour ce jalon est `0.2.0`.
+Le troisième ajoute 43 cas sur la planification et son chemin d'observation seule.
+La version installée et vérifiée pour ce jalon est `0.3.0`.
 
 Les tests métier bloquent les connexions sortantes. La recherche de secrets est un
 contrôle ciblé supplémentaire ; elle ne prétend pas reconnaître toutes les formes
@@ -65,10 +72,18 @@ La migration de la base de démonstration principale a conservé exactement ses
 3 commerçants, 18 observations, 4 tentatives et sa politique globale. Les preuves de
 sauvegarde et de migration restent dans le dossier privé extérieur au dépôt.
 
+Pour le troisième jalon, une base de contrôle séparée a validé les passages
+automatiques dans les créneaux, le respect de la cadence avec deux onglets, la mise
+à jour des relevés et la conservation des formulaires ouverts. Les arrêts empêchent
+les nouveaux contrôles et la reprise globale n'active pas le planificateur. Les
+contrôles continuent quand le navigateur est fermé et le serveur reste actif.
+La politique manuelle autorisait volontairement notification et réservation : les
+passages planifiés n'en ont produit aucune. Voir [les preuves d'interface](JALON_03_PLANIFICATION.md).
+
 ## Ce qui reste hors de cette validation
 
 Aucune connexion à une plateforme ou Telegram, réservation réelle ou annulation réelle
 n'a été testée. L'application n'est pas déployée sur Internet.
-La surveillance planifiée en arrière-plan et la couverture statistique des contrôles
-appartiennent aux prochains jalons. Les audits et sauvegardes privés ne font pas partie
-de la démonstration publique.
+La couverture statistique des contrôles, les notifications planifiées et tout connecteur
+réel restent hors de cette validation. Les audits et sauvegardes privés ne font pas
+partie de la démonstration publique.

@@ -30,7 +30,8 @@ l'anonymisation de données arbitraires : ne jamais journaliser les identifiants
 L'interface écoute uniquement sur `127.0.0.1`, sans partage distant ni rechargement
 automatique. Elle ne comporte pas d'authentification multi-utilisateur et n'est pas
 conçue pour être exposée au réseau ou à Internet. Un lancement de l'écran ne démarre
-aucune surveillance en arrière-plan.
+aucune surveillance : la planification exige un clic explicite et ne reprend pas une
+ancienne session après un redémarrage. Fermer le navigateur ne ferme pas le serveur.
 
 ## Prévenir les actions involontaires
 
@@ -38,6 +39,9 @@ Les modes sans réservation et le dry-run ne peuvent pas appeler la méthode de 
 L'arrêt global, la sélection des commerçants et les tentatives sont persistants. La
 réservation vérifie à nouveau la politique et la sélection dans une transaction SQLite.
 Un résultat incertain reste bloquant ; aucune tentative n'est répétée aveuglément.
+Les passages planifiés utilisent un chemin d'observation seule qui ne peut pas appeler
+la notification ou la réservation, même si ces modes sont actifs pour un cycle manuel.
+Une session exclusive et une cadence persistante préviennent les passages en double.
 
 ## En cas de fuite
 

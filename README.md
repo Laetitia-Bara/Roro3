@@ -73,7 +73,7 @@ instance avant de relancer. [Documentation officielle du débogage VS Code](http
 Le jeu initial comprend trois commerces inventés, deux paniers disponibles, un historique
 fictif de trois mardis et des fenêtres manuelles/estimées. La CLI utilise une horloge fixe au 27 octobre 2026
 pour rendre les résultats reproductibles. Aucun contrôle périodique ne démarre tout seul.
-L'écran déclenche un cycle fictif uniquement sur demande.
+L'écran propose un cycle manuel et une surveillance planifiée, activée explicitement.
 
 ## Commerçants et créneaux
 
@@ -97,6 +97,32 @@ créneaux de retrait restent stables pour une même journée, même après un re
 un redémarrage. L'écran suit la date courante ; la CLI conserve son scénario fixe.
 [Parcours et limites du deuxième jalon](docs/JALON_02_COMMERCANTS.md).
 
+## Surveillance planifiée simulée
+
+Le bloc **Surveillance planifiée** ajoute une observation automatique des commerçants
+actifs et suivis, uniquement pendant leurs créneaux manuels ou estimés.
+
+1. Activer **Observer les disponibilités** et vérifier que l'arrêt global est levé.
+2. Choisir une fréquence entre **15 et 3 600 secondes** (60 par défaut), puis
+   **Enregistrer la fréquence**.
+3. Cliquer sur **Démarrer la surveillance**. L'écran indique le prochain contrôle,
+   le dernier passage et les éventuelles erreurs.
+4. Utiliser **Arrêter la surveillance**, **Arrêt global** ou arrêter le serveur pour terminer.
+
+Les passages planifiés font de l'**observation seule** : aucune notification ni commande,
+même si les options du cycle manuel autorisent une réservation fictive. Un commerçant
+sans horaire, désactivé ou non suivi n'est pas contrôlé par le planificateur. Les créneaux
+qui se recouvrent ne provoquent pas de double passage.
+
+L'app ne reprend pas la surveillance au lancement. L'arrêt global et la désactivation
+d'Observation la désarment ; les lever ne suffit pas à la relancer. La fréquence et
+les derniers passages sont conservés pour respecter la cadence après un redémarrage.
+
+**Le serveur lancé dans VS Code doit rester actif.** Fermer seulement l'onglet du
+navigateur ne l'arrête pas. Un seul moteur sert tous les onglets ; une seconde instance
+sur la même base ne peut pas prendre la surveillance déjà active.
+[Fonctionnement et essai guidé du troisième jalon](docs/JALON_03_PLANIFICATION.md).
+
 ```powershell
 .\.venv\Scripts\python.exe -m roro3 demo --database data\autre-demo.sqlite3
 .\.venv\Scripts\python.exe -m roro3 stop
@@ -109,7 +135,7 @@ avec `dry_run=true`. Même en activant la réservation et en désactivant dry-ru
 l'interface, seules des commandes **fictives** peuvent être produites. Un dry-run
 n'appelle aucune méthode de réservation ; il peut écrire un aperçu dans l'historique.
 
-Les interrupteurs observation, notification et réservation sont indépendants. Si une
+Pour les cycles manuels, les interrupteurs observation, notification et réservation sont indépendants. Si une
 notification ou réservation fictive est activée, les relevés nécessaires enrichissent
 également l'historique. Les comptes rendus de tentative restent affichés même si les
 notifications de disponibilité sont désactivées. L'arrêt global est conservé dans SQLite
@@ -142,14 +168,14 @@ Les tests couvrent les modes sans action, le dry-run, l'arrêt persistant, les d
 au redémarrage et en concurrence, les résultats inconnus, l'historique, la migration
 SQLite, l'édition des commerçants, leur sélection et la validation des horaires.
 Aucun test n'envoie de commande externe. La démonstration se teste avec le réseau bloqué.
-La suite actuelle comporte **121 tests**, réussis localement sur Windows et sur une
+La suite actuelle comporte **164 tests**, réussis localement sur Windows et sur une
 installation séparée du paquet. Le workflow GitHub Actions exécute pytest et Ruff à
 chaque envoi ; son résultat reste consultable dans l'onglet **Actions** du dépôt.
 
 ## Limites du jalon
 
-La planification calcule des prochaines fenêtres ; elle ne lance pas encore de surveillance
-en arrière-plan. Les estimations sont descriptives, sans taux de probabilité : la couverture
+La planification fonctionne tant que le serveur local tourne ; aucun service système
+permanent n'est installé. Les estimations sont descriptives, sans taux de probabilité : la couverture
 complète des jours surveillés reste à modéliser. Une disponibilité observée peut provenir
 d'une remise en vente ; elle n'est pas une heure de publication exacte. Les premiers
 relevés déjà disponibles ne sont pas utilisés comme transitions pour les estimations.

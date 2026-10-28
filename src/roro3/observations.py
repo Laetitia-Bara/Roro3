@@ -1,5 +1,6 @@
 """Orchestration d'un contrôle manuel ; le rythme est géré séparément."""
 
+from collections.abc import Callable, Collection
 from datetime import datetime
 
 from roro3.models import CycleResult
@@ -13,10 +14,23 @@ class MonitorService:
         self.repository, self.connector, self.notifier = repository, connector, notifier
         self.reservations = ReservationService(repository, connector)
 
-    def run_once(self, now: datetime) -> CycleResult:
+    def run_once(
+        self,
+        now: datetime,
+        *,
+        merchant_ids: Collection[str] | None = None,
+        observation_only: bool = False,
+        guard: Callable[[], bool] | None = None,
+    ) -> CycleResult:
+        if merchant_ids is not None and not merchant_ids:
+            return CycleResult()
+        if guard is not None and not guard():
+            return CycleResult(stopped=True)
         if self.repository.is_stopped():
             return CycleResult(stopped=True)
         policy = self.repository.get_policy()
+        if observation_only and not policy.observe:
+            return CycleResult()
         if not (policy.observe or policy.notify or policy.reserve):
             return CycleResult()
         if not any(m.active and m.watched for m in self.repository.list_merchants()):
@@ -24,17 +38,25 @@ class MonitorService:
         observations, notifications = 0, 0
         results = []
         for offer in self.connector.get_offers():
+            if merchant_ids is not None and offer.merchant_id not in merchant_ids:
+                continue
+            if guard is not None and not guard():
+                return CycleResult(observations, notifications, tuple(results), stopped=True)
             if self.repository.is_stopped():
                 return CycleResult(observations, notifications, tuple(results), stopped=True)
             merchant = self.repository.get_merchant(offer.merchant_id)
             if merchant is None or not merchant.active or not merchant.watched:
                 continue
             policy = self.repository.get_policy()
+            if observation_only and not policy.observe:
+                break
             if not (policy.observe or policy.notify or policy.reserve):
                 break
             # Chaque contrôle utile aux autres fonctions enrichit aussi l'historique.
             event = self.repository.record_observation(offer, now)
             observations += event != "duplicate"
+            if observation_only:
+                continue
             if policy.notify and event in {"first_seen_available", "became_available"}:
                 self.notifier.send(f"[SIMULATION] Panier disponible : {offer.id}")
                 notifications += 1
