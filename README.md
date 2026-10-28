@@ -7,6 +7,28 @@ Cette version livre un cœur modulaire, une démonstration locale configurable e
 invariants de sécurité. Aucun compte réel, token ou accès à une plateforme n'est nécessaire.
 Il ne contient ni client Too Good To Go, ni connexion Telegram, ni paiement.
 
+## Utiliser VS Code sur cet ordinateur
+
+L'environnement est déjà installé dans le dossier `.venv`. Dans VS Code, choisir
+**Fichier → Ouvrir le dossier**, puis `D:\Roro3`.
+
+- **Lancer l'application** : ouvrir **Exécuter et déboguer** (`Ctrl+Maj+D`), choisir
+  **Roro3 : lancer l'application**, puis appuyer sur **F5**. Le navigateur s'ouvre sur
+  `http://127.0.0.1:8080`. Le carré rouge ou `Maj+F5` arrête l'application.
+- **Tester** : ouvrir le panneau **Tests** (icône éprouvette), puis **Exécuter tous les
+  tests**. Une autre possibilité est de sélectionner **Roro3 : tests automatiques**
+  dans les configurations de lancement, puis **F5**.
+
+Les extensions Python et Python Debugger sont recommandées par le projet. Si VS Code
+demande un interpréteur, choisir `.venv\Scripts\python.exe` dans le dossier Roro3.
+Une sélection d'interpréteur déjà mémorisée par VS Code peut devoir être corrigée avec
+**Python: Select Interpreter**. Il n'est pas nécessaire de réinstaller l'environnement.
+
+Le lancement utilise le module de l'application, quel que soit le fichier ouvert dans
+l'éditeur. Si le port 8080 est déjà occupé par une instance de Roro3, arrêter cette
+instance avant de relancer. [Documentation officielle du débogage VS Code](https://code.visualstudio.com/docs/python/debugging),
+[panneau de tests Python](https://code.visualstudio.com/docs/python/testing).
+
 ## Installation — Windows / PowerShell
 
 Python 3.14.4 a été utilisé pour les vérifications de ce jalon. Le projet déclare Python
