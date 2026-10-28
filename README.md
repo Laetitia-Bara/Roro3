@@ -10,9 +10,30 @@ Il ne contient ni client Too Good To Go, ni connexion Telegram, ni paiement.
 Le projet met en pratique une architecture modulaire, des modèles typés, des migrations
 SQLite, des tests de concurrence et une interface locale indépendante de la logique métier.
 
+## État du projet — version 0.3.0
+
+| Jalon livré | Fonctionnalités disponibles | Tests automatisés |
+| --- | --- | --- |
+| 0.1 — Socle | Configuration, SQLite, simulation, arrêt global et protection contre les doublons | 73 réussis |
+| 0.2 — Commerçants | Ajout et édition, horaires manuels/estimés, sélection du suivi et persistance | 121 réussis |
+| 0.3 — Planification | Observation dans les créneaux, fréquence configurable, démarrage explicite et affichage des passages | 164 réussis |
+
+La version courante est validée localement, sur une installation séparée et par
+[GitHub Actions](https://github.com/Laetitia-Bara/Roro3/actions/runs/40711361602).
+Les essais d'interface couvrent les passages automatiques, les arrêts, la non-reprise
+au redémarrage et plusieurs onglets sans doublon. [Détail des validations](docs/VALIDATION.md).
+
+Tout fonctionne sur le simulateur. Les contrôles planifiés font uniquement de
+l'observation, sans notification ni réservation. La couverture statistique avancée,
+les notifications planifiées et toute intégration réelle restent hors de cette version.
+
+Ce README est actualisé à chaque jalon livré et testé : fonctionnalités disponibles,
+installation, utilisation, validations et limites. Les étapes de prise en main sont
+décrites dans les documents de jalon, sans publier de données personnelles.
+
 ![Éditeur des horaires manuels et estimés](docs/images/merchant-editor.png)
 
-[Voir le tableau de bord](docs/images/merchants-dashboard.png) ·
+[Voir le tableau de bord actuel](docs/images/scheduler-dashboard.png) ·
 [Architecture](docs/ARCHITECTURE.md) · [Validation](docs/VALIDATION.md)
 
 ## Installation reproductible — Windows / PowerShell
