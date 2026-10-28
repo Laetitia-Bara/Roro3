@@ -1,8 +1,8 @@
 # Validation de Roro 3.0 — 27 octobre 2026
 
-Ce document décrit des vérifications exécutées localement. Le workflow GitHub est
-préparé mais n'a pas été exécuté sur un dépôt distant ; rien n'a été publié.
-
+Ce document décrit les vérifications exécutées localement. Les résultats GitHub Actions
+se consultent séparément dans l'onglet **Actions** du dépôt ; ils ne sont pas déduits des
+résultats locaux.
 
 ## Environnement
 
@@ -64,9 +64,11 @@ débordement. Zéro erreur JavaScript et aucune requête externe observée.
 La migration de la base de démonstration principale a conservé exactement ses
 3 commerçants, 18 observations, 4 tentatives et sa politique globale. Les preuves de
 sauvegarde et de migration restent dans le dossier privé extérieur au dépôt.
+
 ## Ce qui reste hors de cette validation
 
 Aucune connexion à une plateforme ou Telegram, réservation réelle ou annulation réelle
-n'a été testée. L'application n'est pas déployée sur Internet. La surveillance planifiée
-en arrière-plan et la couverture statistique appartiennent aux prochains jalons.
-Les audits et sauvegardes privés restent hors de la démonstration publique.
+n'a été testée. L'application n'est pas déployée sur Internet.
+La surveillance planifiée en arrière-plan et la couverture statistique des contrôles
+appartiennent aux prochains jalons. Les audits et sauvegardes privés ne font pas partie
+de la démonstration publique.

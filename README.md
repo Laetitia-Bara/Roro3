@@ -7,10 +7,49 @@ Cette version livre un cœur modulaire, une démonstration locale configurable e
 invariants de sécurité. Aucun compte réel, token ou accès à une plateforme n'est nécessaire.
 Il ne contient ni client Too Good To Go, ni connexion Telegram, ni paiement.
 
-## Utiliser VS Code sur cet ordinateur
+Le projet met en pratique une architecture modulaire, des modèles typés, des migrations
+SQLite, des tests de concurrence et une interface locale indépendante de la logique métier.
 
-L'environnement est déjà installé dans le dossier `.venv`. Dans VS Code, choisir
-**Fichier → Ouvrir le dossier**, puis `D:\Roro3`.
+![Éditeur des horaires manuels et estimés](docs/images/merchant-editor.png)
+
+[Voir le tableau de bord](docs/images/merchants-dashboard.png) ·
+[Architecture](docs/ARCHITECTURE.md) · [Validation](docs/VALIDATION.md)
+
+## Installation reproductible — Windows / PowerShell
+
+Prérequis : Git et Python. La version vérifiée est Python **3.14.4 sur Windows x64**.
+Le projet déclare Python 3.12 à 3.14 ; les autres versions de cette plage et les autres
+systèmes ne sont pas encore validés. Le fichier de verrou inclut le cœur, l'interface
+optionnelle et les outils de test.
+
+```powershell
+git clone https://github.com/Laetitia-Bara/Roro3.git
+cd Roro3
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-lock.txt
+.\.venv\Scripts\python.exe -m pip install --no-deps -e .
+.\.venv\Scripts\python.exe -m roro3 ui
+```
+
+L'interface s'ouvre sur `http://127.0.0.1:8080`, uniquement sur l'ordinateur local.
+`Ctrl+C` arrête son serveur. Aucun compte, token ou fichier `.env` n'est nécessaire
+pour cette démonstration. Ne pas réutiliser de configuration issue d'un compte réel.
+
+Pour installer seulement le cœur et les tests, sans NiceGUI :
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.\.venv\Scripts\python.exe -m roro3 demo
+```
+
+Cette seconde méthode utilise les plages de versions du projet ; pour reproduire
+l'environnement vérifié complet, préférer le fichier `requirements-lock.txt`.
+
+## Utiliser VS Code
+
+Après l'installation, ouvrir **le dossier Roro3 cloné** avec **Fichier → Ouvrir le dossier**.
+Sur l'installation locale d'origine, ce dossier est `D:\Roro3` ; le projet peut être cloné
+ailleurs sans modifier la configuration VS Code.
 
 - **Lancer l'application** : ouvrir **Exécuter et déboguer** (`Ctrl+Maj+D`), choisir
   **Roro3 : lancer l'application**, puis appuyer sur **F5**. Le navigateur s'ouvre sur
@@ -22,37 +61,12 @@ L'environnement est déjà installé dans le dossier `.venv`. Dans VS Code, choi
 Les extensions Python et Python Debugger sont recommandées par le projet. Si VS Code
 demande un interpréteur, choisir `.venv\Scripts\python.exe` dans le dossier Roro3.
 Une sélection d'interpréteur déjà mémorisée par VS Code peut devoir être corrigée avec
-**Python: Select Interpreter**. Il n'est pas nécessaire de réinstaller l'environnement.
+**Python: Select Interpreter**.
 
 Le lancement utilise le module de l'application, quel que soit le fichier ouvert dans
 l'éditeur. Si le port 8080 est déjà occupé par une instance de Roro3, arrêter cette
 instance avant de relancer. [Documentation officielle du débogage VS Code](https://code.visualstudio.com/docs/python/debugging),
 [panneau de tests Python](https://code.visualstudio.com/docs/python/testing).
-
-## Installation — Windows / PowerShell
-
-Python 3.14.4 a été utilisé pour les vérifications de ce jalon. Le projet déclare Python
-3.12 à 3.14 ; les autres versions de cette plage restent à valider.
-
-```powershell
-cd D:\Roro3
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e ".[dev,ui]"
-.\.venv\Scripts\python.exe -m roro3 demo
-.\.venv\Scripts\python.exe -m roro3 ui
-```
-
-L'interface optionnelle s'ouvre sur `http://127.0.0.1:8080`. Elle n'est pas exposée au
-réseau local. `Ctrl+C` arrête son serveur. Sans l'option `ui`, le cœur et la CLI restent
-utilisables. Voir [le choix d'interface](docs/CHOIX_INTERFACE.md).
-
-Pour reproduire l'environnement vérifié, utiliser `requirements-lock.txt` avant
-l'installation du projet :
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-lock.txt
-.\.venv\Scripts\python.exe -m pip install --no-deps -e .
-```
 
 ## Démonstration
 
@@ -110,8 +124,9 @@ La politique d'environnement initialise une **nouvelle base** ; l'état d'une ba
 créée fait autorité. Les fichiers privés et bases sont exclus de Git.
 
 Ne jamais copier les configurations ou l'historique Git des anciennes applications.
-Les sauvegardes vérifiées sont stockées hors de ce dépôt, avec droits Windows privés.
-Les anciens projets n'ont pas été modifiés. Voir [la sécurité](docs/SECURITE.md).
+Les bases, sessions, clés privées, journaux et sauvegardes doivent rester hors du dépôt.
+Un `.gitignore` n'efface pas un secret déjà présent dans l'historique.
+Voir [les règles de sécurité](docs/SECURITE.md).
 
 ## Architecture et tests
 
@@ -127,6 +142,9 @@ Les tests couvrent les modes sans action, le dry-run, l'arrêt persistant, les d
 au redémarrage et en concurrence, les résultats inconnus, l'historique, la migration
 SQLite, l'édition des commerçants, leur sélection et la validation des horaires.
 Aucun test n'envoie de commande externe. La démonstration se teste avec le réseau bloqué.
+La suite actuelle comporte **121 tests**, réussis localement sur Windows et sur une
+installation séparée du paquet. Le workflow GitHub Actions exécute pytest et Ruff à
+chaque envoi ; son résultat reste consultable dans l'onglet **Actions** du dépôt.
 
 ## Limites du jalon
 
@@ -143,4 +161,4 @@ autorisé. [Conditions officielles, article 7.5](https://www.toogoodtogo.com/fr/
 
 Ce projet est destiné à un usage familial et à une démonstration portfolio Python.
 Aucun service commercial ou déploiement public n'est configuré. Le choix de licence
-de publication sera arrêté avant diffusion ; aucun code du client tiers n'est recopié.
+de réutilisation n'est pas encore arrêté ; aucun code du client tiers n'est recopié.
