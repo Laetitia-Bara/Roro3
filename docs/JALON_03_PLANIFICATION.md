@@ -77,3 +77,10 @@ lors de fermetures de navigateur, sans effet sur les données.
 ![Panneau de surveillance planifiée](images/scheduler-panel.png)
 
 [Vue du tableau de bord de contrôle](images/scheduler-dashboard.png).
+
+## Validation de prise en main
+
+Le parcours a aussi été confirmé manuellement depuis VS Code : les passages s'affichent
+dans les créneaux, l'arrêt global fonctionne et la reprise globale laisse la surveillance
+désarmée. Après Maj+F5 puis F5, les réglages enregistrés sont retrouvés et aucun passage
+automatique ne démarre sans demande explicite. Le jalon est validé le 28 octobre 2026.

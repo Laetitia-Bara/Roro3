@@ -23,6 +23,11 @@ La version courante est validée localement, sur une installation séparée et p
 Les essais d'interface couvrent les passages automatiques, les arrêts, la non-reprise
 au redémarrage et plusieurs onglets sans doublon. [Détail des validations](docs/VALIDATION.md).
 
+La prise en main dans VS Code a également confirmé le démarrage et l'arrêt du suivi,
+l'arrêt global, ainsi que la conservation des réglages sans reprise automatique après
+redémarrage. Le troisième jalon est validé ; l'étape suivante porte sur la consultation
+de l'historique et l'explication des estimations.
+
 Tout fonctionne sur le simulateur. Les contrôles planifiés font uniquement de
 l'observation, sans notification ni réservation. La couverture statistique avancée,
 les notifications planifiées et toute intégration réelle restent hors de cette version.
