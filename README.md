@@ -21,6 +21,8 @@ SQLite, des tests de concurrence et une interface locale indépendante de la log
 
 Les validations locales sont décrites dans [le compte rendu](docs/VALIDATION.md).
 Les résultats distants se consultent dans [GitHub Actions](https://github.com/Laetitia-Bara/Roro3/actions).
+Le code de la version 0.4.0 a passé les 202 tests et Ruff dans
+[ce contrôle GitHub Actions](https://github.com/Laetitia-Bara/Roro3/actions/runs/41075792963).
 Les essais couvrent aussi les passages automatiques simulés, les arrêts, la non-reprise
 au redémarrage et plusieurs onglets sans doublon.
 

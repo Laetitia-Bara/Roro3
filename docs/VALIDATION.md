@@ -19,6 +19,7 @@ puis utilisée depuis un autre dossier pour éviter de tester accidentellement l
 | Même suite, seconde installation non éditable | 202 tests réussis |
 | Cohérence des dépendances, deux environnements | Aucun conflit |
 | Contrôle Ruff et formatage | Réussis |
+| GitHub Actions, code de la version 0.4.0 | [202 tests et Ruff réussis](https://github.com/Laetitia-Bara/Roro3/actions/runs/41075792963) |
 | Démonstration CLI sans réseau, répétée | Résultat stable, aucun ordre par défaut |
 | Modes sans réservation et dry-run | Aucun appel de réservation |
 | Deux services concurrents, même panier/retrait | Une seule commande fictive |
