@@ -11,6 +11,8 @@
 | `ports` / `simulator` | Contrats et seules implémentations externes disponibles : factices |
 | `observations` | Un cycle partagé entre collecte, notification et décision |
 | `analysis` | Estimation descriptive par jour et quart d'heure |
+| `history` / `history_ui` | Filtres, pagination et analyse de la sélection, sans mutation |
+| `family_ui` / `family_access` | Carnet manuel sur réseau privé et accès HTTP/WebSocket protégé |
 | `planning` | Prochaine fenêtre en calendrier Europe/Paris |
 | `scheduler` | Admission des contrôles planifiés, cadence et session exclusive |
 | `scheduler_ui` | Minuteur applicatif unique et panneau de surveillance |
@@ -109,6 +111,32 @@ ce n'est pas une protection contre du code Python malveillant installé par l'ut
 
 ## Observations et temps
 
+Le schéma 4 ajoute le type de jeu de données : `simulated` pour les démonstrations
+existantes, `family` pour une nouvelle base familiale. La migration conserve les tables
+métier et les politiques. Les deux modes refusent d'ouvrir la base de l'autre.
+La frontière de réservation et l'orchestrateur bloquent le mode familial, même si une
+politique de réservation y est forcée. Les offres simulées ne peuvent pas y être insérées.
+
+Les saisies familiales passent par une transaction qui valide le commerce, l'arrêt global,
+le stock entier et l'ordre temporel. Elles prennent l'heure du serveur. Une clé de journée
+locale regroupe les relevés d'un commerce : la colonne historique `pickup_start` y est
+uniquement cette clé interne, pas une heure de retrait fournie par une plateforme.
+Une première présence chaque jour reste distincte d'un passage observé de zéro à disponible.
+
+Le service d'historique lit les relevés en un SELECT, trie les instants UTC puis les
+identifiants et applique les dates dans le fuseau local. Comptes et groupes sont calculés
+avant pagination. Le traitement est en mémoire et destiné aux petits volumes familiaux ;
+une pagination SQL sera nécessaire pour un historique important. Les filtres ne modifient
+ni les estimations enregistrées ni les modes. Aucun connecteur n'est appelé.
+
+Le serveur familial se lie à une IPv4 privée choisie explicitement ou détectée localement.
+Un middleware ASGI vérifie l'hôte, l'origine et une session signée pour les requêtes et
+WebSockets, y compris les ressources NiceGUI. Le code local est aléatoire, jamais placé
+dans une URL et jamais affiché dans les journaux. Les essais de connexion sont limités.
+La session dure douze heures ; son expiration est aussi vérifiée à la réception des messages.
+Le transport HTTP exige un réseau de confiance et n'assure pas de chiffrement ni d'isolation
+entre membres de la famille. Aucun compte de plateforme n'est connecté.
+
 Chaque contrôle est conservé, y compris les absences. Une transition de disponibilité
 est distinguée d'une première présence et d'un simple relevé d'un stock déjà présent.
 Les notifications de disponibilité suivent les transitions, pas chaque scan répété.
@@ -133,6 +161,6 @@ Ces limites sont explicites et testables.
 4. Adaptateur de notification réel si explicitement activé, avec protection des secrets.
 5. Toute connexion de plateforme uniquement après confirmation d'un mécanisme autorisé.
 
-La consultation de trois derniers relevés ou une démonstration fictive ne prouve pas
+La consultation de relevés manuels ou une démonstration fictive ne prouve pas
 un fonctionnement réel avec la plateforme. Aucun service d'arrière-plan, publication
-Internet ou déploiement n'est créé ici.
+Internet ou déploiement Internet n'est créé ici.

@@ -21,7 +21,13 @@ def main() -> None:
     parser.add_argument("--database", type=Path)
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument(
+        "--family", action="store_true", help="Carnet familial accessible sur le réseau privé"
+    )
+    parser.add_argument("--host", help="IPv4 privée du PC, uniquement avec ui --family")
     args = parser.parse_args()
+    if (args.family and args.command != "ui") or (args.host and not args.family):
+        parser.error("--family et --host sont réservés à la commande ui --family")
     load_dotenv(Path.cwd() / ".env", override=False)
     try:
         settings = Settings.from_env(os.environ)
@@ -31,11 +37,27 @@ def main() -> None:
         from dataclasses import replace
 
         settings = replace(settings, database_path=args.database)
+    elif args.family:
+        from dataclasses import replace
+
+        settings = replace(settings, database_path=Path("data/roro3-family.sqlite3"))
     configure_logging()
     if args.command == "ui":
         if importlib.util.find_spec("nicegui") is None:
             parser.error("Installer l'option interface : pip install -e '.[ui]'")
         try:
+            if args.family:
+                from roro3.family_access import family_host
+                from roro3.family_ui import run_family
+
+                try:
+                    host = family_host(args.host)
+                    if not 1 <= args.port <= 65535:
+                        raise ValueError("Le port doit être compris entre 1 et 65 535.")
+                    run_family(settings, host, args.port, show=not args.no_browser)
+                except ValueError as error:
+                    parser.error(str(error))
+                return
             from roro3.ui import run
 
             run(settings, port=args.port, show=not args.no_browser)
@@ -54,7 +76,8 @@ def main() -> None:
     print(
         json.dumps(
             {
-                "connector": "simulated",
+                "connector": "none" if repo.dataset_kind == "family" else "simulated",
+                "dataset": repo.dataset_kind,
                 "stopped": repo.is_stopped(),
                 "policy": asdict(repo.get_policy()),
                 "cycle": result,

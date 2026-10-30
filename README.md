@@ -1,36 +1,37 @@
 # Roro 3.0
 
-Un projet Python familial pour étudier les disponibilités de paniers, proposer des
-créneaux de suivi et démontrer un parcours de réservation robuste **sur données fictives**.
+Un projet Python familial pour conserver des relevés de disponibilités, étudier des
+créneaux et démontrer un parcours de réservation robuste **sur données fictives**.
 
-Cette version livre un cœur modulaire, une démonstration locale configurable et les
-invariants de sécurité. Aucun compte réel, token ou accès à une plateforme n'est nécessaire.
+Deux modes restent séparés : une démonstration fictive et un carnet familial mobile
+alimenté par des saisies manuelles. Aucun compte réel, token ou accès à une plateforme n'est nécessaire.
 Il ne contient ni client Too Good To Go, ni connexion Telegram, ni paiement.
 
 Le projet met en pratique une architecture modulaire, des modèles typés, des migrations
 SQLite, des tests de concurrence et une interface locale indépendante de la logique métier.
 
-## État du projet — version 0.3.0
+## État du projet — version 0.4.0
 
 | Jalon livré | Fonctionnalités disponibles | Tests automatisés |
 | --- | --- | --- |
 | 0.1 — Socle | Configuration, SQLite, simulation, arrêt global et protection contre les doublons | 73 réussis |
 | 0.2 — Commerçants | Ajout et édition, horaires manuels/estimés, sélection du suivi et persistance | 121 réussis |
 | 0.3 — Planification | Observation dans les créneaux, fréquence configurable, démarrage explicite et affichage des passages | 164 réussis |
+| 0.4 — Historique et famille | Filtres, pagination, explication des estimations et carnet mobile protégé sur réseau privé | 202 réussis |
 
-La version courante est validée localement, sur une installation séparée et par
-[GitHub Actions](https://github.com/Laetitia-Bara/Roro3/actions/runs/40711361602).
-Les essais d'interface couvrent les passages automatiques, les arrêts, la non-reprise
-au redémarrage et plusieurs onglets sans doublon. [Détail des validations](docs/VALIDATION.md).
+Les validations locales sont décrites dans [le compte rendu](docs/VALIDATION.md).
+Les résultats distants se consultent dans [GitHub Actions](https://github.com/Laetitia-Bara/Roro3/actions).
+Les essais couvrent aussi les passages automatiques simulés, les arrêts, la non-reprise
+au redémarrage et plusieurs onglets sans doublon.
 
 La prise en main dans VS Code a également confirmé le démarrage et l'arrêt du suivi,
 l'arrêt global, ainsi que la conservation des réglages sans reprise automatique après
-redémarrage. Le troisième jalon est validé ; l'étape suivante porte sur la consultation
-de l'historique et l'explication des estimations.
+redémarrage. Le troisième jalon a été validé manuellement le 28 octobre 2026.
 
-Tout fonctionne sur le simulateur. Les contrôles planifiés font uniquement de
-l'observation, sans notification ni réservation. La couverture statistique avancée,
-les notifications planifiées et toute intégration réelle restent hors de cette version.
+Les contrôles planifiés utilisent uniquement le simulateur, sans notification ni
+réservation. Le carnet familial accepte des commerces et des relevés réels saisis
+manuellement, dans une base distincte, sans connexion Too Good To Go. La collecte réelle,
+la réservation réelle et la couverture statistique avancée ne sont pas livrées.
 
 Ce README est actualisé à chaque jalon livré et testé : fonctionnalités disponibles,
 installation, utilisation, validations et limites. Les étapes de prise en main sont
@@ -40,6 +41,9 @@ décrites dans les documents de jalon, sans publier de données personnelles.
 
 [Voir le tableau de bord actuel](docs/images/scheduler-dashboard.png) ·
 [Architecture](docs/ARCHITECTURE.md) · [Validation](docs/VALIDATION.md)
+
+[Guide iPhone et carnet familial](docs/JALON_04_FAMILLE.md) ·
+[Capture du parcours mobile sur données de test](docs/images/family-mobile.png)
 
 ## Installation reproductible — Windows / PowerShell
 
@@ -100,6 +104,55 @@ Le jeu initial comprend trois commerces inventés, deux paniers disponibles, un 
 fictif de trois mardis et des fenêtres manuelles/estimées. La CLI utilise une horloge fixe au 27 octobre 2026
 pour rendre les résultats reproductibles. Aucun contrôle périodique ne démarre tout seul.
 L'écran propose un cycle manuel et une surveillance planifiée, activée explicitement.
+
+## Carnet familial sur iPhone
+
+1. Dans VS Code, choisir **Roro3 : test familial sur iPhone**, puis **F5**.
+2. Garder le PC allumé et connecter l'iPhone au même réseau domestique.
+3. Dans Safari, ouvrir **l'adresse affichée dans le terminal de VS Code**, par exemple
+   `http://192.168.1.20:8080`. L'adresse appartient au PC, pas à l'iPhone.
+4. Ouvrir localement `data/family-access.json` dans VS Code, puis saisir sa valeur
+   `access_code` dans Safari. Ce code est généré au premier lancement et exclu de Git.
+5. Ajouter deux ou trois commerces, renseigner leurs horaires et enregistrer les
+   disponibilités vérifiées **manuellement dans l'application officielle**.
+
+Safari permet aussi **Partager → Sur l'écran d'accueil**. Il s'agit d'une application
+web servie par le PC ; le fonctionnement hors ligne et les notifications iOS ne sont
+pas implémentés. `Maj+F5` arrête le serveur. L'adresse peut changer après un redémarrage
+de la box ; utiliser alors celle du terminal.
+
+La base `data/roro3-family.sqlite3` commence vide et conserve les saisies. Elle ne peut
+pas être ouverte comme base de simulation. Aucun formulaire ne demande de mot de passe
+ou de token Too Good To Go et aucune réservation ne peut partir de cette base.
+
+L'accès exige un code, y compris pour la connexion de l'interface en arrière-plan.
+**HTTP est réservé à un réseau privé de confiance et ne chiffre pas les échanges.**
+Ne pas ouvrir de port sur la box ni créer de tunnel Internet. Si Windows demande une
+autorisation réseau, sélectionner le réseau privé uniquement.
+[Guide de lancement, dépannage et limites](docs/JALON_04_FAMILLE.md).
+
+```powershell
+.\.venv\Scripts\python.exe -m roro3 ui --family
+# Si le PC possède plusieurs cartes réseau : préciser son IPv4 privée.
+.\.venv\Scripts\python.exe -m roro3 ui --family --host 192.168.1.20
+```
+
+## Historique et explication des estimations
+
+**Historique et estimations** permet de filtrer les relevés par commerce, événement et
+dates locales inclusives. Le tri suit l'heure réelle des relevés, avec 20 résultats par
+page. Les compteurs et groupes horaires portent sur toute la sélection filtrée.
+
+Choisir un commerce montre les quarts d'heure contenant des passages observés de zéro à
+disponible. Un groupe doit réunir trois journées distinctes du même jour de semaine pour
+atteindre le seuil descriptif. Plusieurs relevés d'une seule journée ne suffisent pas.
+L'écran explique aussi les groupes encore insuffisants et ne modifie pas les horaires.
+**Recalculer les estimations** reste une action séparée depuis le tableau de bord.
+
+Une présence déjà disponible au premier relevé n'est pas une transition. Les jours avec
+un relevé ne mesurent pas une couverture continue ; aucun taux de probabilité ni horaire
+exact de publication n'est annoncé. Quelques jours d'essai ne remplacent pas plusieurs
+semaines d'observation. Le parcours de réservation se démontre séparément sur le simulateur.
 
 ## Commerçants et créneaux
 
@@ -194,7 +247,7 @@ Les tests couvrent les modes sans action, le dry-run, l'arrêt persistant, les d
 au redémarrage et en concurrence, les résultats inconnus, l'historique, la migration
 SQLite, l'édition des commerçants, leur sélection et la validation des horaires.
 Aucun test n'envoie de commande externe. La démonstration se teste avec le réseau bloqué.
-La suite actuelle comporte **164 tests**, réussis localement sur Windows et sur une
+La suite actuelle comporte **202 tests**, réussis localement sur Windows et sur une
 installation séparée du paquet. Le workflow GitHub Actions exécute pytest et Ruff à
 chaque envoi ; son résultat reste consultable dans l'onglet **Actions** du dépôt.
 
@@ -212,5 +265,5 @@ automatisée ; une intégration réelle n'est pas promise et nécessiterait un m
 autorisé. [Conditions officielles, article 7.5](https://www.toogoodtogo.com/fr/legal/terms-and-conditions-using-the-app).
 
 Ce projet est destiné à un usage familial et à une démonstration portfolio Python.
-Aucun service commercial ou déploiement public n'est configuré. Le choix de licence
+Aucun service commercial ou déploiement Internet n'est configuré. Le choix de licence
 de réutilisation n'est pas encore arrêté ; aucun code du client tiers n'est recopié.

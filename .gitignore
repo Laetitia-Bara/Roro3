@@ -21,6 +21,7 @@ logs/
 *.log
 *.dump
 credentials*.json
+family-access.json
 *tokens*.json
 credentials/
 tokens/

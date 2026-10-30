@@ -64,6 +64,8 @@ body { background: #f7f5ef; color: #243b31; font-family: 'Segoe UI', Arial, sans
 @media (max-width: 600px) {
     .window-editor-row { grid-template-columns: 1fr 1fr; }
     .merchant-editor { padding: 20px; }
+    .q-field__native, .q-field__input { font-size: 16px; }
+    .q-btn { min-height: 44px; }
 }
 """
 
@@ -76,6 +78,8 @@ def run(settings: Settings, port: int = 8080, show: bool = True) -> None:
         raise RuntimeError("Installez l'option interface : pip install -e '.[ui]'.") from exc
 
     from .demo import build_demo
+    from .history import HistoryService
+    from .history_ui import register_history_page
     from .merchant_ui import open_merchant_editor
     from .merchants import MerchantService
     from .planning import next_window
@@ -93,8 +97,10 @@ def run(settings: Settings, port: int = 8080, show: bool = True) -> None:
     )
     scheduler = SchedulerService(application.repo, application.monitor, timezone=settings.timezone)
     register_scheduler(scheduler, clock)
+    register_history_page(application.repo, settings.timezone)
     local_zone = ZoneInfo(settings.timezone)
     merchant_service = MerchantService(application.repo, settings.timezone)
+    history_service = HistoryService(application.repo, settings.timezone)
     weekdays = ("Lun.", "Mar.", "Mer.", "Jeu.", "Ven.", "Sam.", "Dim.")
 
     def local_timestamp(value: str) -> str:
@@ -180,6 +186,7 @@ def run(settings: Settings, port: int = 8080, show: bool = True) -> None:
 
             with ui.row().classes("topbar"):
                 ui.label("Roro 3.0").classes("brand")
+                ui.link("Historique et estimations", "/history")
                 ui.label("Simulation locale").classes("soft-pill")
             with ui.column().classes("hero"):
                 ui.label("L'atelier des bons moments").classes("eyebrow")
@@ -326,14 +333,15 @@ def run(settings: Settings, port: int = 8080, show: bool = True) -> None:
 
                     @ui.refreshable
                     def observation_history() -> None:
-                        observations = application.repo.list_observations()
+                        observations = history_service.query(page_size=5).rows
                         names = {
                             merchant.id: merchant.name
                             for merchant in application.repo.list_merchants()
                         }
                         with ui.card().classes("panel"):
                             ui.label("Derniers relevés").classes("section-title")
-                            for record in observations[:5]:
+                            ui.link("Voir tout l'historique", "/history")
+                            for record in observations:
                                 with ui.column().classes("history-line").style("gap: 2px"):
                                     ui.label(names.get(record["merchant_id"], "Commerçant fictif"))
                                     ui.label(

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "roro3"
-version = "0.3.0"
+version = "0.4.0"
 description = "Observation de paniers et démonstration familiale sur données fictives"
 readme = "README.md"
 requires-python = ">=3.12,<3.15"

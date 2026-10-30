@@ -29,6 +29,10 @@ CREATE TABLE IF NOT EXISTS runtime (
     observe INTEGER NOT NULL, notify INTEGER NOT NULL,
     reserve INTEGER NOT NULL, dry_run INTEGER NOT NULL, stopped INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS dataset (
+    id INTEGER PRIMARY KEY CHECK(id=1),
+    kind TEXT NOT NULL CHECK(kind IN ('simulated','family'))
+);
 CREATE TABLE IF NOT EXISTS merchants (
     id TEXT PRIMARY KEY, name TEXT NOT NULL, windows TEXT NOT NULL,
     active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)),
@@ -111,23 +115,48 @@ def _require_merchant(db: sqlite3.Connection, identifier: str) -> Merchant:
 
 
 class Repository:
-    def __init__(self, path: Path, initial_policy: RunPolicy | None = None) -> None:
+    def __init__(
+        self,
+        path: Path,
+        initial_policy: RunPolicy | None = None,
+        *,
+        dataset_kind: str | None = None,
+    ) -> None:
+        if dataset_kind not in (None, "simulated", "family"):
+            raise ValueError("Type de données inconnu")
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        initial = initial_policy or RunPolicy()
+        initial = (
+            RunPolicy(observe=False) if dataset_kind == "family" else initial_policy or RunPolicy()
+        )
         with self.connection() as db:
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1, 2, 3):
+            if version not in (0, 1, 2, 3, 4):
                 raise ValueError("Version de base non prise en charge")
             db.execute("PRAGMA journal_mode=WAL")
             db.execute("BEGIN IMMEDIATE")
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1, 2, 3):
+            if version not in (0, 1, 2, 3, 4):
                 raise ValueError("Version de base non prise en charge")
             # Schéma statique sans triggers ; éviter le commit implicite d'executescript.
             for statement in SCHEMA.split(";"):
                 if statement.strip():
                     db.execute(statement)
+            marker = db.execute("SELECT kind FROM dataset WHERE id=1").fetchone()
+            # Les anciennes bases sont des démonstrations. Ne jamais les renommer
+            # en données familiales et mélanger silencieusement leurs relevés.
+            existing = (
+                version != 0
+                or db.execute(
+                    "SELECT EXISTS(SELECT 1 FROM merchants) OR EXISTS(SELECT 1 FROM observations)"
+                ).fetchone()[0]
+            )
+            kind = marker[0] if marker else "simulated" if existing else dataset_kind or "simulated"
+            if dataset_kind is not None and kind != dataset_kind:
+                raise ValueError(
+                    "Cette base appartient à un autre mode. Choisissez une base séparée."
+                )
+            db.execute("INSERT OR IGNORE INTO dataset VALUES(1,?)", (kind,))
             if version == 1:
                 db.execute(
                     "ALTER TABLE merchants ADD COLUMN active INTEGER NOT NULL "
@@ -143,7 +172,60 @@ class Repository:
             )
             db.execute("INSERT OR IGNORE INTO scheduler_settings(id) VALUES(1)")
             db.execute("INSERT OR IGNORE INTO scheduler_runtime(id) VALUES(1)")
-            db.execute("PRAGMA user_version=3")
+            db.execute("PRAGMA user_version=4")
+
+    @property
+    def dataset_kind(self) -> str:
+        with self.connection() as db:
+            return db.execute("SELECT kind FROM dataset WHERE id=1").fetchone()[0]
+
+    def record_manual_observation(
+        self, merchant_id: str, available: int, now: datetime, timezone: str
+    ) -> str:
+        """Saisie familiale, horodatée par le serveur, sans créer d'offre distante.
+
+        pickup_start est ici une clé de journée locale interne, jamais une heure
+        de retrait annoncée. Aucune réservation ne peut utiliser cette base.
+        """
+        from zoneinfo import ZoneInfo
+
+        if type(available) is not int or not 0 <= available <= 1000:
+            raise ValueError("Le nombre de paniers doit être un entier entre 0 et 1 000.")
+        instant = utc(now)
+        local = instant.astimezone(ZoneInfo(timezone))
+        observed_at = timestamp(instant)
+        day_key = timestamp(local.replace(hour=0, minute=0, second=0, microsecond=0))
+        offer_id = f"manual:{merchant_id}:{local.date().isoformat()}"
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            if db.execute("SELECT kind FROM dataset WHERE id=1").fetchone()[0] != "family":
+                raise ValueError("La saisie manuelle nécessite la base familiale séparée.")
+            if db.execute("SELECT stopped FROM runtime WHERE id=1").fetchone()[0]:
+                raise ValueError("Le suivi est arrêté. Reprenez-le avant une saisie.")
+            if not _require_merchant(db, merchant_id).active:
+                raise ValueError("Réactivez ce commerçant avant une saisie.")
+            previous = db.execute(
+                "SELECT available,observed_at FROM observations WHERE merchant_id=? "
+                "AND offer_id=? ORDER BY observed_at DESC,id DESC LIMIT 1",
+                (merchant_id, offer_id),
+            ).fetchone()
+            if previous and previous["observed_at"] > observed_at:
+                raise ValueError("L'horloge du serveur précède le dernier relevé enregistré.")
+            event = (
+                "unavailable"
+                if available == 0
+                else "first_seen_available"
+                if previous is None
+                else "became_available"
+                if previous["available"] == 0
+                else "still_available"
+            )
+            cursor = db.execute(
+                "INSERT INTO observations(offer_id,merchant_id,pickup_start,observed_at,"
+                "available,event) VALUES(?,?,?,?,?,?) ON CONFLICT DO NOTHING",
+                (offer_id, merchant_id, day_key, observed_at, available, event),
+            )
+            return event if cursor.rowcount else "duplicate"
 
     @contextmanager
     def connection(self) -> Iterator[sqlite3.Connection]:
@@ -420,6 +502,8 @@ class Repository:
         observed_at, pickup = timestamp(now), timestamp(offer.pickup_start)
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
+            if db.execute("SELECT kind FROM dataset WHERE id=1").fetchone()[0] != "simulated":
+                raise ValueError("Les offres simulées ne peuvent pas enrichir une base familiale.")
             previous = db.execute(
                 "SELECT available FROM observations WHERE offer_id=? AND pickup_start=? "
                 "ORDER BY observed_at DESC,id DESC LIMIT 1",
@@ -448,6 +532,8 @@ class Repository:
         """Le claim est le point d'admission de l'action ; il survit à un arrêt brutal."""
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
+            if db.execute("SELECT kind FROM dataset WHERE id=1").fetchone()[0] == "family":
+                return ReservationResult("disabled")
             state = db.execute("SELECT * FROM runtime WHERE id=1").fetchone()
             if state["stopped"]:
                 return ReservationResult("stopped")

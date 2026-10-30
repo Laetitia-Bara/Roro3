@@ -22,6 +22,8 @@ class MonitorService:
         observation_only: bool = False,
         guard: Callable[[], bool] | None = None,
     ) -> CycleResult:
+        if self.repository.dataset_kind != "simulated":
+            return CycleResult()
         if merchant_ids is not None and not merchant_ids:
             return CycleResult()
         if guard is not None and not guard():

@@ -1,4 +1,4 @@
-# Validation de Roro 3.0 — 28 octobre 2026
+# Validation de Roro 3.0 — 30 octobre 2026
 
 Ce document décrit les vérifications exécutées localement. Les résultats GitHub Actions
 se consultent séparément dans l'onglet **Actions** du dépôt ; ils ne sont pas déduits des
@@ -15,8 +15,8 @@ puis utilisée depuis un autre dossier pour éviter de tester accidentellement l
 
 | Vérification | Résultat |
 |---|---|
-| Suite pytest, environnement de développement | 164 tests réussis |
-| Même suite, seconde installation non éditable | 164 tests réussis |
+| Suite pytest, environnement de développement | 202 tests réussis |
+| Même suite, seconde installation non éditable | 202 tests réussis |
 | Cohérence des dépendances, deux environnements | Aucun conflit |
 | Contrôle Ruff et formatage | Réussis |
 | Démonstration CLI sans réseau, répétée | Résultat stable, aucun ordre par défaut |
@@ -38,11 +38,17 @@ puis utilisée depuis un autre dossier pour éviter de tester accidentellement l
 | Observation planifiée malgré les modes manuels de réservation | Aucun appel de notification ou réservation |
 | Arrêt global ou Observation désactivée puis réactivée | Pas de reprise automatique |
 | Résultat d'un propriétaire remplacé pendant le contrôle | Aucun relevé tardif enregistré |
+| Filtres de dates locales et changements d'heure | Bornes inclusives respectées |
+| Pagination, tri temporel et analyse de toute la sélection | Résultats cohérents |
+| Migration 3 vers 4 et séparation famille/simulation | Lignes existantes conservées, mélange refusé |
+| Base familiale avec politique de réservation forcée | Aucune collecte, notification ou tentative |
+| Sessions familiales, origines étrangères et codes erronés | Accès refusés et essais limités |
 
 La version initiale avait 73 tests. Le deuxième jalon ajoute 48 cas portant sur les
 commerçants, la sélection, la migration, les formulaires et le catalogue dynamique.
 Le troisième ajoute 43 cas sur la planification et son chemin d'observation seule.
-La version installée et vérifiée pour ce jalon est `0.3.0`.
+Le quatrième ajoute l'historique filtrable et le carnet familial protégé ; la suite
+actuelle compte 202 tests. La version des sources est `0.4.0`.
 
 Les tests métier bloquent les connexions sortantes. La recherche de secrets est un
 contrôle ciblé supplémentaire ; elle ne prétend pas reconnaître toutes les formes
@@ -80,6 +86,19 @@ contrôles continuent quand le navigateur est fermé et le serveur reste actif.
 La politique manuelle autorisait volontairement notification et réservation : les
 passages planifiés n'en ont produit aucune. Voir [les preuves d'interface](JALON_03_PLANIFICATION.md).
 
+Pour le quatrième jalon, Edge au format iPhone de 390 pixels a vérifié la connexion par
+code, deux commerces, deux horaires, la saisie zéro puis disponible, l'arrêt, la reprise,
+les filtres et la persistance au rechargement. Aucun débordement horizontal, appel externe
+ou erreur JavaScript observé. Un second parcours sur 28 relevés de test a vérifié les
+deux pages, le seuil de trois journées distinctes et une sélection vide. La navigation
+et le cycle manuel de la démonstration fictive fonctionnent également.
+
+Une comparaison des lignes de toutes les tables préexistantes de la base principale
+avant et après migration 3 vers 4 confirme leur conservation. Les sauvegardes SQLite
+ont été restaurées et vérifiées dans un dossier privé hors du dépôt.
+Le lancement familial par défaut utilise une nouvelle base vide ; aucune donnée réelle
+n'a été publiée. Voir [le parcours familial et ses limites](JALON_04_FAMILLE.md).
+
 ## Ce qui reste hors de cette validation
 
 Aucune connexion à une plateforme ou Telegram, réservation réelle ou annulation réelle
@@ -87,3 +106,5 @@ n'a été testée. L'application n'est pas déployée sur Internet.
 La couverture statistique des contrôles, les notifications planifiées et tout connecteur
 réel restent hors de cette validation. Les audits et sauvegardes privés ne font pas
 partie de la démonstration publique.
+Safari sur un iPhone physique et le passage du pare-feu depuis un autre appareil du
+foyer restent à confirmer ; les essais du navigateur ont utilisé l'IPv4 privée du PC.

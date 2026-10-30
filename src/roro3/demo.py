@@ -63,7 +63,7 @@ def build_demo(
     clock: Callable[[], datetime] | None = None,
 ) -> DemoApp:
     anchor = now or DEMO_NOW
-    repo = Repository(database_path, initial_policy)
+    repo = Repository(database_path, initial_policy, dataset_kind="simulated")
     merchants = (
         Merchant("demo-bakery", "L’Atelier du Pain", (ScheduleWindow(1, time(18), time(18, 15)),)),
         Merchant(
